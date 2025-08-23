@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (c) 2025, STEREOLABS.
+# Copyright (c) 2022, STEREOLABS.
 #
 # All rights reserved.
 #
@@ -18,40 +18,48 @@
 #
 ########################################################################
 
+"""
+    Read a stream and display the left images using OpenCV
+"""
+import sys
 import pyzed.sl as sl
+import cv2
 
 
 def main():
-    # Create a Camera object
-    zedone = sl.CameraOne()
 
-    # Create a InitParameters object and set configuration parameters
-    init_params = sl.InitParametersOne()
-    init_params.camera_resolution = sl.RESOLUTION.AUTO # Use HD720 opr HD1200 video mode, depending on camera type.
-    init_params.camera_fps = 30  # Set fps at 30
+    init = sl.InitParameters()
+    init.camera_resolution = sl.RESOLUTION.HD720
+    init.depth_mode = sl.DEPTH_MODE.PERFORMANCE
 
-    # Open the camera
-    err = zedone.open(init_params)
-    if err != sl.ERROR_CODE.SUCCESS:
-        print("Camera Open : "+repr(err)+". Exit program.")
-        exit()
+    if (len(sys.argv) > 1) :
+        ip = sys.argv[1]
+        init.set_from_stream(ip)
+    else :
+        print('Usage : python3 streaming_receiver.py ip')
+        exit(1)
 
+    cam = sl.Camera()
+    status = cam.open(init)
+    if status != sl.ERROR_CODE.SUCCESS:
+        print(repr(status))
+        exit(1)
 
-    # Capture 50 frames and stop
-    i = 0
-    image = sl.Mat()
-    while i < 50:
-        # Grab an image, a RuntimeParameters object must be given to grab()
-        if zedone.grab() <= sl.ERROR_CODE.SUCCESS:
-            # A new image is available if grab() returns SUCCESS
-            zedone.retrieve_image(image)
-            timestamp = zedone.get_timestamp(sl.TIME_REFERENCE.CURRENT)  # Get the timestamp at the time the image was captured
-            print("Image resolution: {0} x {1} || Image timestamp: {2}\n".format(image.get_width(), image.get_height(),
-                  timestamp.get_milliseconds()))
-            i = i + 1
+    runtime = sl.RuntimeParameters()
+    mat = sl.Mat()
 
-    # Close the camera
-    zedone.close()
+    key = ''
+    print("  Quit : CTRL+C\n")
+    while key != 113:
+        err = cam.grab(runtime)
+        if (err == sl.ERROR_CODE.SUCCESS) :
+            cam.retrieve_image(mat, sl.VIEW.LEFT)
+            cv2.imshow("ZED", mat.get_data())
+            key = cv2.waitKey(1)
+        else :
+            key = cv2.waitKey(1)
+
+    cam.close()
 
 if __name__ == "__main__":
     main()
