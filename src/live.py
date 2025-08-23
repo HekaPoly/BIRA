@@ -53,7 +53,30 @@ def main():
         err = cam.grab(runtime)
         if err == sl.ERROR_CODE.SUCCESS:
             cam.retrieve_image(mat, sl.VIEW.LEFT)
-            cv2.imshow("ZED", mat.get_data())
+            frame = mat.get_data()
+
+            # Coordonnées du rectangle
+            pt1 = (100, 100)
+            pt2 = (300, 300)
+            cv2.rectangle(frame, pt1, pt2, (0, 255, 0), 2)
+
+            # Calcul du centre
+            center_x = (pt1[0] + pt2[0]) // 2
+            center_y = (pt1[1] + pt2[1]) // 2
+
+            # Ajout d'un nombre au centre
+            cv2.putText(
+                frame,
+                "42",  # le nombre à afficher
+                (center_x - 10, center_y + 10),  # coordonnées approximatives du centre
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,  # taille du texte
+                (0, 0, 255),  # couleur rouge
+                2,  # épaisseur
+                cv2.LINE_AA
+            )
+
+            cv2.imshow("ZED", frame)
             key = cv2.waitKey(5)
             settings(key, cam, runtime, mat)
         else:
