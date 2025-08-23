@@ -23,8 +23,9 @@
     in an OpenGL window
 """
 import sys
-import ogl_viewer.viewer as gl
+import viewer as gl
 import pyzed.sl as sl
+import cv2
 
 if __name__ == "__main__":
     # Create a Camera object
@@ -88,7 +89,6 @@ if __name__ == "__main__":
             viewer.update_view(image, objects)
 
     viewer.exit()
-
     image.free(memory_type=sl.MEM.CPU)
     # Disable modules and close camera
     zed.disable_object_detection()
