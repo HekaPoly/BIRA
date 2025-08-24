@@ -111,7 +111,6 @@ class FolieTechnique:
                 self.hello_dance()
 
         elif action == FolieTechniqueAction.FIND_PERSONS:
-            self.text_queue.put("Jouvre mes yeux...")
             detector.object_detection(0, 60, opt)
 
         #elif action == FolieTechniqueAction.POINT_PERSON:
