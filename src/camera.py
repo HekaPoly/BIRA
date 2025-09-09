@@ -7,14 +7,17 @@ class Camera:
     __lock = Lock() # i don<t know if it is better inside or outside the class
     __zed = None
     __init_params = None
+
+    def __init__(self, svo=None):
+        self.__svo = svo
         
     @staticmethod
-    def get_camera(svo=None):
+    def get_Camera(svo=None):
+        #WARNING svo is only used at the first call of this method
         with Camera.__lock:
             if Camera.__zed == None:
                 Camera.__zed = sl.Camera()
 
-                #if the order doesn't matter i will move this to the constructeur
                 input_type = sl.InputType()
 
                 if svo is not None:
@@ -28,20 +31,19 @@ class Camera:
                 Camera.__init_params.depth_maximum_distance = 3
                 Camera.__init_params.camera_fps = 60
 
-                #should i make a open and close method
-
-
         return Camera.__zed
     
-    def open():
-        status = Camera.__zed.open(Camera.__init_params)
+    def open(self):
+        status = Camera.get_Camera(self.__svo).open(Camera.__init_params)
 
         if status != sl.ERROR_CODE.SUCCESS:
             print(repr(status))
             exit()
+            
 
-    def close():
-        Camera.__zed.close()
+    def close(self):
+        if Camera.__zed is not None:
+            Camera.__zed.close()
 
     
 
