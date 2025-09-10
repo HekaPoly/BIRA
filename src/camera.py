@@ -12,7 +12,7 @@ class Camera:
         self.__svo = svo
         
     @staticmethod
-    def get_Camera(svo=None):
+    def get_camera(svo=None):
         #WARNING svo is only used at the first call of this method
         with Camera.__lock:
             if Camera.__zed == None:
@@ -34,7 +34,7 @@ class Camera:
         return Camera.__zed
     
     def open(self):
-        status = Camera.get_Camera(self.__svo).open(Camera.__init_params)
+        status = Camera.get_camera(self.__svo).open(Camera.__init_params)
 
         if status != sl.ERROR_CODE.SUCCESS:
             print(repr(status))

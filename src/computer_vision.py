@@ -5,17 +5,24 @@ from threading import Lock, Thread
 import cv2
 import time
 import cv_viewer.tracking_viewer as cv_viewer
+import history as rd
+import cv_viewer.labels as lab
+import camera
+
 
 
 class ComputerVision:
-    
+    __lock = Lock()
+    __MAX_DISTANCE: float = 7.0
+    __PROXIMITY_THRESHOLD: float = 0.3
+
     def __init__(self):
-        self.lock = Lock()
-        self.run_signal = False
-        self.exit_signal = False
-        self.image_net = None
-        self.detections = None
+        self.__run_signal = False
+        self.__exit_signal = False
+        self.__image_net = None
+        self.__detections = None
     
+    #delete im_shape?
     def __xywh2abcd(self, xywh, im_shape):
         output = np.zeros((4, 2))
 
@@ -45,7 +52,7 @@ class ComputerVision:
 
     def __detections_to_custom_box(self, detections, im0):
         output = []
-        for i, det in enumerate(detections):
+        for i, det in enumerate(detections): #what is the purpose of i
             xywh = det.xywh[0]
 
             # Creating ingestable objects for the ZED SDK
@@ -58,27 +65,24 @@ class ComputerVision:
         return output
     
     def __torch_thread(self, weights, img_size, conf_thres=0.2, iou_thres=0.45):
-        global detections
-
         print("Intializing Network...")
 
         yolo = YOLO(weights)
         yolo.model.to('cuda')
         yolo.model.eval()
 
-        while not self.exit_signal:
-            if run_signal:
-                self.lock.acquire()
+        while not self.__exit_signal:
+            if self.__run_signal:
+                with ComputerVision.__lock:
+                    img = cv2.cvtColor(self.__image_net, cv2.COLOR_BGRA2RGB)
+                    # https://docs.ultralytics.com/modes/predict/#video-suffixes
+                    det = yolo.predict(img, save=False, imgsz=img_size, conf=conf_thres,
+                                    iou=iou_thres)[0].cpu().numpy().boxes
 
-                img = cv2.cvtColor(self.image_net, cv2.COLOR_BGRA2RGB)
-                # https://docs.ultralytics.com/modes/predict/#video-suffixes
-                det = yolo.predict(img, save=False, imgsz=img_size, conf=conf_thres,
-                                iou=iou_thres)[0].cpu().numpy().boxes
+                    # ZED CustomBox format (with inverse letterboxing tf applied)
+                    self.__detections = self.__detections_to_custom_box(det, self.__image_net)
 
-                # ZED CustomBox format (with inverse letterboxing tf applied)
-                detections = detections_to_custom_box(det, self.image_net)
-                self.lock.release()
-                run_signal = False
+                self.__run_signal = False
             time.sleep(0.01)
         
     def __find_closest_object(self, new_position, object_dict, threshold):
@@ -186,27 +190,24 @@ class ComputerVision:
 
         coordinate_dict = {}
         next_object_id = 0  # Counter for generating unique object IDs
-        while not exit_signal:
+        while not self.__exit_signal:
 
             if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
 
                 # -- Get the image
-                lock.acquire()
-                zed.retrieve_image(image_left_tmp, sl.VIEW.LEFT)
-                image_net = image_left_tmp.get_data()
-                lock.release()
-                run_signal = True
+                with ComputerVision.__lock:
+                    zed.retrieve_image(image_left_tmp, sl.VIEW.LEFT)
+                    self.__image_net = image_left_tmp.get_data()
+                self.__run_signal = True
 
                 # -- Detection running on the other thread
-                while run_signal:
+                while self.__run_signal:
                     time.sleep(0.001)
 
                 # Wait for detections
-                lock.acquire()
-
-                # -- Ingest detections
-                zed.ingest_custom_box_objects(detections)
-                lock.release()
+                with ComputerVision.__lock:
+                    # -- Ingest detections
+                    zed.ingest_custom_box_objects(self.__detections)
 
                 zed.retrieve_objects(objects, obj_runtime_param)
 
@@ -214,7 +215,7 @@ class ComputerVision:
                 for obj in object_list:
                     if len(obj.bounding_box) == 0 : continue  
                     if np.isnan(obj.position).any(): continue
-                    if obj.position[2] > MAX_DISTANCE: continue  # Filter outliers by distance.
+                    if obj.position[2] > ComputerVision.__MAX_DISTANCE: continue  # Filter outliers by distance.
                     
                     current_position = np.array(list(obj.position))
                     
@@ -222,7 +223,7 @@ class ComputerVision:
                     objects_dict = coordinate_dict.setdefault(obj.raw_label, {})
                     
                     # Find the closest object of the same label within the proximity threshold
-                    closest_id = find_closest_object(current_position, objects_dict, PROXIMITY_THRESHOLD)
+                    closest_id = self.__find_closest_object(current_position, objects_dict, ComputerVision.__PROXIMITY_THRESHOLD)
 
                     if closest_id is not None:
                         # Append the position to the existing object's history
@@ -249,17 +250,20 @@ class ComputerVision:
                 key = cv2.waitKey(10)
                 current_time = time.time()
                 if key == 27 or current_time > timeout:
-                    exit_signal = True
-
+                    self.__exit_signal = True
             else:
-                exit_signal = True
+                self.__exit_signal = True
         
         image_left.free()
-        exit_signal = True
+        self.__exit_signal = True
         zed.disable_object_detection()
         zed.close()
 
         return coordinate_dict
+    
+    def exec_detection(self, label: str,  opt, duration: int=15):
+        self.object_detection(duration, opt, lab.get_label_id(label))
+
 
 
 
