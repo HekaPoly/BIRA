@@ -44,6 +44,10 @@ class Camera:
     def close(self):
         if Camera.__zed is not None:
             Camera.__zed.close()
+    
+    @staticmethod
+    def get_init_params(self):
+        return Camera.__init_params
 
     
 

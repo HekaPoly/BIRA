@@ -16,11 +16,13 @@ class ComputerVision:
     __MAX_DISTANCE: float = 7.0
     __PROXIMITY_THRESHOLD: float = 0.3
 
-    def __init__(self):
+    def __init__(self, opt):
         self.__run_signal = False
         self.__exit_signal = False
         self.__image_net = None
         self.__detections = None
+        self.__opt = opt
+        self.__zed = Camera(opt.svo)
     
     #delete im_shape?
     def __xywh2abcd(self, xywh, im_shape):
@@ -114,18 +116,19 @@ class ComputerVision:
         
         return closest_obj_id
     
-    def object_detection(self, duration: int, opt, label: int = -1) -> dict:
+    def object_detection(self, duration: int, label: int = -1) -> dict:
 
-        capture_thread = Thread(target=self.__torch_thread, kwargs={'weights': opt.weights,
-                                                            'img_size': opt.img_size,
-                                                            "conf_thres": opt.conf_thres})
+        capture_thread = Thread(target=self.__torch_thread, kwargs={'weights': self.__opt.weights,
+                                                            'img_size': self.__opt.img_size,
+                                                            "conf_thres": self.__opt.conf_thres})
         capture_thread.start()
         print("Initializing Camera...")
 
-        zed = Camera(opt.svo)
-        zed.open()
+        self.__zed.open()
 
         image_left_tmp = sl.Mat()
+        runtime_params = sl.RuntimeParameters()
+
 
         print("Initialized Camera")
 
@@ -133,18 +136,18 @@ class ComputerVision:
         # If the camera is static, uncomment the following line to have better performances
         # and boxes sticked to the ground.
         # positional_tracking_parameters.set_as_static = True
-        zed.enable_positional_tracking(positional_tracking_parameters)
+        self.__zed.enable_positional_tracking(positional_tracking_parameters)
 
         obj_param = sl.ObjectDetectionParameters()
         obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
         obj_param.enable_tracking = False
-        zed.enable_object_detection(obj_param)
+        self.__zed.enable_object_detection(obj_param)
 
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
 
         # Display
-        camera_infos = zed.get_camera_information()
+        camera_infos = self.__zed.get_camera_information()
         camera_res = camera_infos.camera_configuration.resolution
 
         # Utilities for 2D display
@@ -159,7 +162,7 @@ class ComputerVision:
         camera_config = camera_infos.camera_configuration
         tracks_resolution = sl.Resolution(400, display_resolution.height)
         track_view_generator = cv_viewer.TrackingViewer(tracks_resolution, camera_config.fps,
-                                                        init_params.depth_maximum_distance)
+                                                        Camera.get_init_params().depth_maximum_distance)
         track_view_generator.set_camera_calibration(camera_config.calibration_parameters)
         image_track_ocv = np.zeros((tracks_resolution.height, tracks_resolution.width, 4),
                                 np.uint8)
@@ -174,11 +177,11 @@ class ComputerVision:
         next_object_id = 0  # Counter for generating unique object IDs
         while not self.__exit_signal:
 
-            if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+            if self.__zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
 
                 # -- Get the image
                 with ComputerVision.__lock:
-                    zed.retrieve_image(image_left_tmp, sl.VIEW.LEFT)
+                    self.__zed.retrieve_image(image_left_tmp, sl.VIEW.LEFT)
                     self.__image_net = image_left_tmp.get_data()
                 self.__run_signal = True
 
@@ -189,9 +192,9 @@ class ComputerVision:
                 # Wait for detections
                 with ComputerVision.__lock:
                     # -- Ingest detections
-                    zed.ingest_custom_box_objects(self.__detections)
+                    self.__zed.ingest_custom_box_objects(self.__detections)
 
-                zed.retrieve_objects(objects, obj_runtime_param)
+                self.__zed.retrieve_objects(objects, obj_runtime_param)
 
                 object_list = objects.object_list
                 for obj in object_list:
@@ -220,8 +223,8 @@ class ComputerVision:
                 
                 # -- Display
                 # Retrieve display data
-                zed.retrieve_image(image_left, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
-                zed.get_position(cam_w_pose, sl.REFERENCE_FRAME.WORLD)
+                self.__zed.retrieve_image(image_left, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+                self.__zed.get_position(cam_w_pose, sl.REFERENCE_FRAME.WORLD)
 
                 # 2D rendering
                 np.copyto(image_left_ocv, image_left.get_data())
@@ -238,13 +241,13 @@ class ComputerVision:
         
         image_left.free()
         self.__exit_signal = True
-        zed.disable_object_detection()
-        zed.close()
+        self.__zed.disable_object_detection()
+        self.__zed.close()
 
         return coordinate_dict
     
-    def exec_detection(self, label: str,  opt, duration: int=15):
-        self.object_detection(duration, opt, lab.get_label_id(label))
+    def exec_detection(self, label: str, duration: int=15):
+        self.object_detection(duration, lab.get_label_id(label))
 
 
 

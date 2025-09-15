@@ -6,13 +6,13 @@ from text_viewer import TextViewer
 from time import sleep
 import utils
 import history as history
-import detector
 import argparse
 import torch
 import math
 import faulthandler
 import uart
 from enum import Enum
+from computer_vision import ComputerVision
 
 faulthandler.enable()
 
@@ -83,13 +83,15 @@ def main():
 
     opt = parser.parse_args()
 
+    cv = ComputerVision(opt) 
+
     if opt.cv is not None:
         try:
             duration = float('inf') if opt.cv.lower() == 'inf' else float(opt.cv)
         except ValueError:
             raise ValueError(f"Invalid value for --cv: {opt.cv}")
         with torch.no_grad():
-            coordinated_target_list = detector.object_detection(duration, opt)
+            coordinated_target_list = cv.object_detection(duration, opt)
         return
     elif opt.stt:
         run_stt()
