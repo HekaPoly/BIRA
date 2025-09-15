@@ -54,7 +54,7 @@ class ComputerVision:
 
     def __detections_to_custom_box(self, detections, im0):
         output = []
-        for i, det in enumerate(detections): #what is the purpose of i
+        for _, det in enumerate(detections): #what is the purpose of i
             xywh = det.xywh[0]
 
             # Creating ingestable objects for the ZED SDK

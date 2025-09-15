@@ -46,7 +46,7 @@ class Camera:
             Camera.__zed.close()
     
     @staticmethod
-    def get_init_params(self):
+    def get_init_params():
         return Camera.__init_params
 
     

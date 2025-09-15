@@ -91,7 +91,7 @@ def main():
         except ValueError:
             raise ValueError(f"Invalid value for --cv: {opt.cv}")
         with torch.no_grad():
-            coordinated_target_list = cv.object_detection(duration, opt)
+            coordinated_target_list = cv.object_detection(duration, 39)
         return
     elif opt.stt:
         run_stt()
