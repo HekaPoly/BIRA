@@ -49,8 +49,15 @@ class Camera:
     def get_init_params():
         return Camera.__init_params
 
-    
+    def retrieveImage(self, image: sl.Mat, view=sl.VIEW.LEFT):
+         if self.__zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+            with Camera.__lock:
+                self.__zed.retrieve_image(image, view)
+                return image.get_data()
 
     
-
+if __name__ == "__main__":
+    cam = Camera()
+    cam.open()
     
+    cam.close()
