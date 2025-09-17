@@ -59,6 +59,7 @@ class Camera:
 
     
 if __name__ == "__main__":
+    print("Camera test starting")
     cam = Camera()
     cam.open()
     
