@@ -59,7 +59,6 @@ class Camera:
 
     
 if __name__ == "__main__":
-    print("Starting Camera Test")
     cam = Camera()
     cam.open()
     
@@ -67,7 +66,7 @@ if __name__ == "__main__":
         frame = cam.retrieveImage()
         if frame is not None:
             print("Image retrieved successfully.")
-            cv2.imshow("Camera Frame left", cv2.COLOR_BGRA2RGB(frame, cv2.COLOR_BGRA2RGB))
+            cv2.imshow("Camera Frame left", cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB))
             
         key = cv2.waitKey(1)
         if key == 27:  # Press 'ESC' to exit
