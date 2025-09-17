@@ -1,5 +1,6 @@
 from threading import Lock
 import pyzed.sl as sl
+import cv2
 
 
 
@@ -49,15 +50,28 @@ class Camera:
     def get_init_params():
         return Camera.__init_params
 
-    def retrieveImage(self, image: sl.Mat, view=sl.VIEW.LEFT):
-         if self.__zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+    def retrieveImage(self, image = sl.Mat(), view=sl.VIEW.LEFT, runtime_params=sl.RuntimeParameters()):
+        if Camera.__zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+            print("Image grabbed")
             with Camera.__lock:
-                self.__zed.retrieve_image(image, view)
+                Camera.__zed.retrieve_image(image, view)
                 return image.get_data()
 
     
 if __name__ == "__main__":
+    print
     cam = Camera()
     cam.open()
     
+    while True:
+        frame = cam.retrieveImage()
+        if frame is not None:
+            print("Image retrieved successfully.")
+            cv2.imshow("Camera Frame left", frame)
+            
+        key = cv2.waitKey(1)
+        if key == 27:  # Press 'ESC' to exit
+            break
+    
+    cv2.destroyAllWindows()
     cam.close()
