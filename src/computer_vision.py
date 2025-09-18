@@ -16,13 +16,16 @@ class ComputerVision:
     __MAX_DISTANCE: float = 7.0
     __PROXIMITY_THRESHOLD: float = 0.3
 
-    def __init__(self, opt):
+    def __init__(self, opt = None):
         self.__run_signal = False
         self.__exit_signal = False
         self.__image_net = None
         self.__detections = None
         self.__opt = opt
-        self.__camera = Camera(opt.svo)
+        if opt is None:
+            self.__camera = Camera()
+        else:
+            self.__camera = Camera(opt.svo)
     
     #delete im_shape?
     def __xywh2abcd(self, xywh, im_shape):
