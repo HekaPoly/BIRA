@@ -5,6 +5,8 @@ import sys
 import tempfile
 from ctypes import *
 
+import micro
+
 # Load the Whisper model once
 model = whisper.load_model("small", device="cuda")
 
