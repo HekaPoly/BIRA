@@ -1,6 +1,6 @@
 import multiprocessing
 from scipy.stats import trim_mean
-import speech_to_text
+import micro
 import numpy as np
 from text_viewer import TextViewer
 from time import sleep
@@ -61,12 +61,12 @@ def run_stt():
     
     while True:
         text_queue.put({"text": "Dis moi quelque chose!", "countdown": 10})
-        text = speech_to_text.transcribe_for(10)
+        text = micro.transcribe_for(10)
         text_queue.put({"text": f"Tu as dis: \n{text}", "countdown": 10})
         sleep(10)
 
 def run_bira_sequence(opt): 
-    text = speech_to_text.transcribe_directly()
+    text = micro.transcribe_directly()
     print(text)
     label = utils.string_to_label(text)
     print(label)   
