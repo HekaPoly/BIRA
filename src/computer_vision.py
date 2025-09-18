@@ -1,13 +1,14 @@
 import numpy as np
 import pyzed.sl as sl
 from ultralytics import YOLO
-from threading import Lock, Thread, Event
+from threading import Lock, Thread
 import cv2
 import time
 import cv_viewer.tracking_viewer as cv_viewer
 import history as rd
 import cv_viewer.labels as lab
 from camera import Camera
+import argparse
 
 
 
@@ -16,16 +17,13 @@ class ComputerVision:
     __MAX_DISTANCE: float = 7.0
     __PROXIMITY_THRESHOLD: float = 0.3
 
-    def __init__(self, opt = None):
+    def __init__(self, opt):
         self.__run_signal = False
         self.__exit_signal = False
         self.__image_net = None
         self.__detections = None
         self.__opt = opt
-        if opt is None:
-            self.__camera = Camera()
-        else:
-            self.__camera = Camera(opt.svo)
+        self.__camera = Camera(opt.svo)
     
     #delete im_shape?
     def __xywh2abcd(self, xywh, im_shape):
@@ -246,6 +244,17 @@ class ComputerVision:
         self.object_detection(duration, lab.get_label_id(label))
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--weights', type=str, default='../models/yolov8n.pt', help='model.pt path(s)')
+    parser.add_argument('--svo', type=str, default=None, help='optional svo file')
+    parser.add_argument('--img_size', type=int, default=416, help='inference size (pixels)')
+    parser.add_argument('--conf_thres', type=float, default=0.4, help='object confidence threshold')
+    parser.add_argument('--cv', type=str, default=None, help='Showcase cv abilities of BIRA for specified duration (use inf for infinity)')
+    parser.add_argument('--stt', action="store_true", help='Run speech to text app')
+    parser.add_argument('--motors', help='Testing motors app')
+
+    opt = parser.parse_args()
+
     cv = ComputerVision()
     cv.exec_detection("bouteille")
 
