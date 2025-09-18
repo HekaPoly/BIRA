@@ -1,7 +1,7 @@
 import numpy as np
 import pyzed.sl as sl
 from ultralytics import YOLO
-from threading import Lock, Thread
+from threading import Lock, Thread, Event
 import cv2
 import time
 import cv_viewer.tracking_viewer as cv_viewer
@@ -22,7 +22,7 @@ class ComputerVision:
         self.__image_net = None
         self.__detections = None
         self.__opt = opt
-        self.__zed = Camera(opt.svo)
+        self.__camera = Camera(opt.svo)
     
     #delete im_shape?
     def __xywh2abcd(self, xywh, im_shape):
@@ -54,7 +54,7 @@ class ComputerVision:
 
     def __detections_to_custom_box(self, detections, im0):
         output = []
-        for _, det in enumerate(detections): #what is the purpose of i
+        for det in detections: #what is the purpose of i
             xywh = det.xywh[0]
 
             # Creating ingestable objects for the ZED SDK
@@ -122,36 +122,31 @@ class ComputerVision:
                                                             'img_size': self.__opt.img_size,
                                                             "conf_thres": self.__opt.conf_thres})
         capture_thread.start()
+
         print("Initializing Camera...")
-
-        self.__zed.open()
-
-        image_left_tmp = sl.Mat()
+        self.__camera.open()
         runtime_params = sl.RuntimeParameters()
-
-
         print("Initialized Camera")
 
         positional_tracking_parameters = sl.PositionalTrackingParameters()
         # If the camera is static, uncomment the following line to have better performances
         # and boxes sticked to the ground.
         # positional_tracking_parameters.set_as_static = True
-        self.__zed.enable_positional_tracking(positional_tracking_parameters)
+        Camera.get_camera().enable_positional_tracking(positional_tracking_parameters)
 
         obj_param = sl.ObjectDetectionParameters()
         obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
         obj_param.enable_tracking = False
-        self.__zed.enable_object_detection(obj_param)
+        Camera.get_camera().enable_object_detection(obj_param)
 
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
 
         # Display
-        camera_infos = self.__zed.get_camera_information()
+        camera_infos = Camera.get_camera().get_camera_information()
         camera_res = camera_infos.camera_configuration.resolution
 
         # Utilities for 2D display
-        image_left = sl.Mat()
         display_resolution = sl.Resolution(min(camera_res.width, 1280), min(camera_res.height, 720))
         image_scale = [display_resolution.width / camera_res.width,
                     display_resolution.height / camera_res.height]
@@ -177,12 +172,11 @@ class ComputerVision:
         next_object_id = 0  # Counter for generating unique object IDs
         while not self.__exit_signal:
 
-            if self.__zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+            if Camera.get_camera().grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
 
                 # -- Get the image
                 with ComputerVision.__lock:
-                    self.__zed.retrieve_image(image_left_tmp, sl.VIEW.LEFT)
-                    self.__image_net = image_left_tmp.get_data()
+                    self.__image_net = self.__camera.retrieve_image(sl.VIEW.LEFT)
                 self.__run_signal = True
 
                 # -- Detection running on the other thread
@@ -192,9 +186,9 @@ class ComputerVision:
                 # Wait for detections
                 with ComputerVision.__lock:
                     # -- Ingest detections
-                    self.__zed.ingest_custom_box_objects(self.__detections)
+                    Camera.get_camera().ingest_custom_box_objects(self.__detections)
 
-                self.__zed.retrieve_objects(objects, obj_runtime_param)
+                Camera.get_camera().retrieve_objects(objects, obj_runtime_param)
 
                 object_list = objects.object_list
                 for obj in object_list:
@@ -223,11 +217,11 @@ class ComputerVision:
                 
                 # -- Display
                 # Retrieve display data
-                self.__zed.retrieve_image(image_left, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
-                self.__zed.get_position(cam_w_pose, sl.REFERENCE_FRAME.WORLD)
+                Camera.get_camera().get_position(cam_w_pose, sl.REFERENCE_FRAME.WORLD)
 
                 # 2D rendering
-                np.copyto(image_left_ocv, image_left.get_data())
+                np.copyto(image_left_ocv, 
+                          self.__camera.retrieve_image(sl.VIEW.LEFT, sl.MEM.CPU, display_resolution))
                 cv_viewer.render_2D(image_left_ocv, image_scale, objects, obj_param.enable_tracking, label)
                 global_image = cv2.hconcat([image_left_ocv, image_track_ocv])
                 cv2.imshow("BIRA - Computer Vision", global_image)
@@ -239,16 +233,18 @@ class ComputerVision:
             else:
                 self.__exit_signal = True
         
-        image_left.free()
         self.__exit_signal = True
-        self.__zed.disable_object_detection()
-        self.__zed.close()
+        Camera.get_camera().disable_object_detection()
+        self.__camera.close()
 
         return coordinate_dict
     
     def exec_detection(self, label: str, duration: int=15):
         self.object_detection(duration, lab.get_label_id(label))
 
+if __name__ == "__main__":
+    cv = ComputerVision()
+    cv.exec_detection("bouteille")
 
 
 

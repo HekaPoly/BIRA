@@ -5,9 +5,10 @@ import cv2
 
 
 class Camera:
-    __lock = Lock() # i don<t know if it is better inside or outside the class
+    __lock = Lock()
     __zed = None
     __init_params = None
+    __image = sl.Mat()
 
     def __init__(self, svo=None):
         self.__svo = svo
@@ -50,21 +51,26 @@ class Camera:
     def get_init_params():
         return Camera.__init_params
 
-    def retrieveImage(self, image = sl.Mat(), view=sl.VIEW.LEFT, runtime_params=sl.RuntimeParameters()):
-        if Camera.__zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+    def retrieve_image(self, view = sl.VIEW.LEFT, memory = sl.MEM.CPU, resolution = sl.Resolution(0, 0), runtime_params = sl.RuntimeParameters()):
+        if Camera.get_camera(self.__svo).grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
             print("Image grabbed")
             with Camera.__lock:
-                Camera.__zed.retrieve_image(image, view)
-                return image.get_data()
+                Camera.__zed.retrieve_image(Camera.__image, view, memory, resolution)
+                return Camera.__image.get_data()
 
+    def __del__(self):
+        if Camera.__image is not None:
+            Camera.__image.free()
     
+    
+
 if __name__ == "__main__":
     print("Camera test starting")
     cam = Camera()
     cam.open()
     
     while True:
-        frame = cam.retrieveImage()
+        frame = cam.retrieve_image()
         if frame is not None:
             print("Image retrieved successfully.")
             cv2.imshow("Camera Frame left", cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB))
