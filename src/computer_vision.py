@@ -13,7 +13,6 @@ import argparse
 
 
 class ComputerVision:
-    __lock = Lock()
     __MAX_DISTANCE: float = 7.0
     __PROXIMITY_THRESHOLD: float = 0.3
 
@@ -24,6 +23,7 @@ class ComputerVision:
         self.__detections = None
         self.__opt = opt
         self.__camera = Camera(opt.svo)
+        self.__lock = Lock()
     
     #delete im_shape?
     def __xywh2abcd(self, xywh, im_shape):
@@ -76,7 +76,7 @@ class ComputerVision:
 
         while not self.__exit_signal:
             if self.__run_signal:
-                with ComputerVision.__lock:
+                with self.__lock:
                     img = cv2.cvtColor(self.__image_net, cv2.COLOR_BGRA2RGB)
                     # https://docs.ultralytics.com/modes/predict/#video-suffixes
                     det = yolo.predict(img, save=False, imgsz=img_size, conf=conf_thres,
@@ -133,18 +133,18 @@ class ComputerVision:
         # If the camera is static, uncomment the following line to have better performances
         # and boxes sticked to the ground.
         # positional_tracking_parameters.set_as_static = True
-        Camera.get_camera().enable_positional_tracking(positional_tracking_parameters)
+        self.__camera.get_camera().enable_positional_tracking(positional_tracking_parameters)
 
         obj_param = sl.ObjectDetectionParameters()
         obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
         obj_param.enable_tracking = False
-        Camera.get_camera().enable_object_detection(obj_param)
+        self.__camera.get_camera().enable_object_detection(obj_param)
 
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
 
         # Display
-        camera_infos = Camera.get_camera().get_camera_information()
+        camera_infos = self.__camera.get_camera().get_camera_information()
         camera_res = camera_infos.camera_configuration.resolution
 
         # Utilities for 2D display
@@ -173,10 +173,10 @@ class ComputerVision:
         next_object_id = 0  # Counter for generating unique object IDs
         while not self.__exit_signal:
 
-            if Camera.get_camera().grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+            if self.__camera.get_camera().grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
 
                 # -- Get the image
-                with ComputerVision.__lock:
+                with self.__lock:
                     self.__image_net = self.__camera.retrieve_image(sl.VIEW.LEFT)
                 self.__run_signal = True
 
@@ -185,11 +185,11 @@ class ComputerVision:
                     time.sleep(0.001)
 
                 # Wait for detections
-                with ComputerVision.__lock:
+                with self.__lock:
                     # -- Ingest detections
-                    Camera.get_camera().ingest_custom_box_objects(self.__detections)
+                    self.__camera.get_camera().ingest_custom_box_objects(self.__detections)
 
-                Camera.get_camera().retrieve_objects(objects, obj_runtime_param)
+                self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
 
                 object_list = objects.object_list
                 for obj in object_list:
@@ -218,7 +218,7 @@ class ComputerVision:
                 
                 # -- Display
                 # Retrieve display data
-                Camera.get_camera().get_position(cam_w_pose, sl.REFERENCE_FRAME.WORLD)
+                self.__camera.get_camera().get_position(cam_w_pose, sl.REFERENCE_FRAME.WORLD)
 
                 # 2D rendering
                 np.copyto(image_left_ocv, 
@@ -235,7 +235,7 @@ class ComputerVision:
                 self.__exit_signal = True
         
         self.__exit_signal = True
-        Camera.get_camera().disable_object_detection()
+        self.__camera.get_camera().disable_object_detection()
         self.__camera.close()
 
         return coordinate_dict
