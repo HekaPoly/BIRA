@@ -255,7 +255,7 @@ if __name__ == "__main__":
 
     opt = parser.parse_args()
 
-    cv = ComputerVision()
+    cv = ComputerVision(opt)
     cv.exec_detection("bouteille")
 
 
