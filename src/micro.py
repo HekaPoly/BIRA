@@ -13,7 +13,7 @@ class Micro:
         self.stream = sd.InputStream(
             samplerate = self.sample_rate,
             channels = self.channels,
-            dtype = 'int16',
+            dtype = "int16",
             blocksize = block_size,
             device = self.device,
             callback = callback
@@ -32,7 +32,7 @@ class Micro:
         if self.recording is None:
             raise ValueError("Aucun enregistrement à sauvegarder")
 
-        with wave.open(filename, 'wb') as wf:
+        with wave.open(filename, "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
             wf.setframerate(self.sample_rate)
@@ -44,11 +44,11 @@ class Micro:
             self.stream = sd.InputStream(
                 samplerate = self.sample_rate,
                 channels = 1,
-                dtype = 'int16',
+                dtype = "int16",
                 device = self.device
             )
         return self.stream
 
-# Trouver quoi écrire
+# À compléter une fois le tout terminé
 # if __name__ == "__main__":
 #     print()

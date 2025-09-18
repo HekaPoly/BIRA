@@ -130,12 +130,13 @@ class SpeechToText:
 
     #     return str(result["text"].strip())
 
-    def transcribe(audio_data):
+    def transcribe(self, audio_data):
         return
     
-    def transcribe_from_micro(micro):
+    def transcribe_from_micro(self, micro):
         return
 
-if __name__ == "__main__":
-    print(SpeechToText.transcribe_directly())
+# À compléter une fois le tout terminé
+# if __name__ == "__main__":
+#     print()
     
