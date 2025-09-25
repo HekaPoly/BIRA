@@ -1,5 +1,5 @@
 """
-SLM Manager par Marcelo Zevallos Gavidia
+SLM Manager par Marcelo Zevallos Gavidia et Ryan Ajakane
 ===========
 
 Ce module encapsule l’appel à un Small Language Model (SLM) pour analyser une
