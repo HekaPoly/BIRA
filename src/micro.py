@@ -7,10 +7,10 @@ class Micro:
         self.sampling_frequency = sampling_frequency
         self.maximum_duration = maximum_duration
         self.peripheral_device = peripheral_device
-        self.stream = None
+        self.recording = None
 
     def start_recording(self):
-        self.stream = sd.InputStream(
+        self.recording = sd.InputStream(
             samplerate = self.sample_rate,
             channels = self.channels,
             dtype = "int16",
@@ -18,37 +18,38 @@ class Micro:
             device = self.device,
             callback = callback
         )
-        self.stream.start()
-        print("Enregistrement démarré")
+        self.recording.start()
+        print("Recording started")
     
     def stop_recording(self):
-        if self.stream != None:
-            self.stream.stop()
-            self.stream.close()
-            self.stream = None
-        print("Enregistrement arrêté")
+        if self.recording != None:
+            self.recording.stop()
+            self.recording.close()
+            self.recording = None
+        print("Recording stopped")
     
     def save_recording(self, filename):
         if self.recording is None:
-            raise ValueError("Aucun enregistrement à sauvegarder")
+            raise ValueError("No recording to save")
 
         with wave.open(filename, "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
             wf.setframerate(self.sample_rate)
             wf.writeframes(self.recording.tobytes())
-        print(f"Fichier sauvegardé sous {filename}")
+        print(f"Filename saved as {filename}")
     
     def get_stream(self):
-        if self.stream is None:
-            self.stream = sd.InputStream(
+        if self.recording is None:
+            self.recording = sd.InputStream(
                 samplerate = self.sample_rate,
                 channels = 1,
                 dtype = "int16",
                 device = self.device
             )
-        return self.stream
+        return self.recording
 
-# À compléter une fois le tout terminé
-# if __name__ == "__main__":
-#     print()
+if __name__ == "__main__":
+    micro = Micro(44100, 5)
+    micro.start_recording()
+    micro.save_recording("test.wav")
