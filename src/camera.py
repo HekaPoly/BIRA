@@ -83,6 +83,9 @@ class Camera:
 if __name__ == "__main__":
     print("Camera test starting")
     cam = Camera()
+    cam2 = Camera()
+
+    print("WOww the singleton works bro!" if cam is cam2 else "What the helly...")
     
     with cam:
         while True:
