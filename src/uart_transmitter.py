@@ -47,7 +47,7 @@ class UARTTransmitter:
         Returns:
             dataSuccessfullySent (bool): Result of data transmission (Successful or Unsuccessful).
         """
-        angle =  int((2.15*int(angle)+360) % 360)
+        angle =  int((2.15 * int(angle) + 360) % 360)
         assert(angle >= 0 and angle <= 360)
         serial_ports = self.get_serial_ports_list()
         if len(serial_ports) != 1:
