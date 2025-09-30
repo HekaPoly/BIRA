@@ -60,11 +60,22 @@ class Camera:
     
 
     def retrieve_image(self, view = sl.VIEW.LEFT, memory = sl.MEM.CPU, resolution = sl.Resolution(0, 0), runtime_params = sl.RuntimeParameters()):
+        """Retrieves the next image from the camera
+        Parameters:
+            view (sl.VIEW): The image representation/view
+            memory (sl.MEM): Place where the image will be stored
+            resolution (sl.Resolution): The width and height of the image
+            runtime_params (sl.RuntimeParameters): The parameters for sl.Camera.grab method
+        Returns:
+            np.ndarray or None: the array representing the image captured or None
+        """
         if self.__zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
             print("Image grabbed")
             with Camera.__lock:
                 self.__zed.retrieve_image(self.__image, view, memory, resolution)
                 return self.__image.get_data()
+        
+        return None
 
     def __del__(self):
         if hasattr(self, "_Camera__zed"):

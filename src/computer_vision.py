@@ -25,8 +25,13 @@ class ComputerVision:
         self.__camera = Camera(opt.svo)
         self.__lock = Lock()
     
-    #delete im_shape?
-    def __xywh2abcd(self, xywh, im_shape):
+    def __xywh2abcd(self, xywh):
+        """Converts the bounding boxes from xywh format to abcd format
+        Parameters:
+            xywh (torch.Tensor): The bounding boxes in xywh format
+        Returns:
+            np.ndarray: The bounding boxes in abcd format
+        """
         output = np.zeros((4, 2))
 
         # Center / Width / Height -> BBox corners coordinates
@@ -53,14 +58,20 @@ class ComputerVision:
         return output
 
 
-    def __detections_to_custom_box(self, detections, im0):
+    def __detections_to_custom_box(self, detections):
+        """Converts externally detected objects into objects ingestable by ZED SDK
+        Parameters:
+            detections (YOLO.Boxes): The detection bounding boxes.
+        Results:
+            list[sl.CustomBoxObjectData]: Externally detected objects ingestable by ZED SDK 
+        """
         output = []
-        for det in detections: #what is the purpose of i
+        for det in detections:
             xywh = det.xywh[0]
 
             # Creating ingestable objects for the ZED SDK
             obj = sl.CustomBoxObjectData()
-            obj.bounding_box_2d = self.__xywh2abcd(xywh, im0.shape)
+            obj.bounding_box_2d = self.__xywh2abcd(xywh)
             obj.label = det.cls
             obj.probability = det.conf
             obj.is_grounded = False
@@ -68,6 +79,15 @@ class ComputerVision:
         return output
     
     def __torch_thread(self, weights, img_size, conf_thres=0.2, iou_thres=0.45):
+        """Updates the detections attribute using the image_net attribute as long as the exit_signal attribute is False
+        Parameters:
+            weights (str or Path): The pretrained model
+            img_size (int or tupple): The image size for inference
+            conf_thres (float): The minimum confidence threshold for detections
+            iou_thres (float): Intersection Over Union (IoU) threshold for Non-Maximum Suppression (NMS)
+        Returns:
+            Nothing
+        """
         print("Intializing Network...")
 
         yolo = YOLO(weights)
@@ -83,7 +103,7 @@ class ComputerVision:
                                     iou=iou_thres)[0].cpu().numpy().boxes
 
                     # ZED CustomBox format (with inverse letterboxing tf applied)
-                    self.__detections = self.__detections_to_custom_box(det, self.__image_net)
+                    self.__detections = self.__detections_to_custom_box(det)
 
                 self.__run_signal = False
             time.sleep(0.01)
@@ -118,7 +138,13 @@ class ComputerVision:
         return closest_obj_id
     
     def object_detection(self, duration: int, label: int = -1) -> dict:
-
+        """Opens the camera and searches for an object. It also displays the camera image with the bounding boxes during the process. The camera is closed afterwards.
+        Parameters:
+            duration (int): Time given to search the object
+            label (int): The integer corresponding to the object to find
+        Returns:
+            dict: The coordinates of the closest object searched
+        """
         capture_thread = Thread(target=self.__torch_thread, kwargs={'weights': self.__opt.weights,
                                                             'img_size': self.__opt.img_size,
                                                             "conf_thres": self.__opt.conf_thres})
