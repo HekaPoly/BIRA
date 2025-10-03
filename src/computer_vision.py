@@ -1,7 +1,7 @@
 import numpy as np
 import pyzed.sl as sl
 from ultralytics import YOLO
-from threading import Lock, Thread
+from threading import Lock, Thread, Event
 import cv2
 import time
 import cv_viewer.tracking_viewer as cv_viewer
@@ -9,21 +9,22 @@ import history as rd
 import cv_viewer.labels as lab
 from camera import Camera
 import argparse
+from  utils import string_to_label
 
 
 
 class ComputerVision:
+    __lock = Lock()
     __MAX_DISTANCE: float = 7.0
     __PROXIMITY_THRESHOLD: float = 0.3
 
-    def __init__(self, opt):
+    def __init__(self, opt = None):
         self.__run_signal = False
         self.__exit_signal = False
         self.__image_net = None
         self.__detections = None
         self.__opt = opt
-        self.__camera = Camera(opt.svo)
-        self.__lock = Lock()
+        self.__camera = Camera()
     
     def __xywh2abcd(self, xywh):
         """Converts the bounding boxes from xywh format to abcd format
@@ -66,7 +67,7 @@ class ComputerVision:
             list[sl.CustomBoxObjectData]: Externally detected objects ingestable by ZED SDK 
         """
         output = []
-        for det in detections:
+        for det in detections: #what is the purpose of i
             xywh = det.xywh[0]
 
             # Creating ingestable objects for the ZED SDK
@@ -96,7 +97,7 @@ class ComputerVision:
 
         while not self.__exit_signal:
             if self.__run_signal:
-                with self.__lock:
+                with ComputerVision.__lock:
                     img = cv2.cvtColor(self.__image_net, cv2.COLOR_BGRA2RGB)
                     # https://docs.ultralytics.com/modes/predict/#video-suffixes
                     det = yolo.predict(img, save=False, imgsz=img_size, conf=conf_thres,
@@ -184,7 +185,7 @@ class ComputerVision:
         camera_config = camera_infos.camera_configuration
         tracks_resolution = sl.Resolution(400, display_resolution.height)
         track_view_generator = cv_viewer.TrackingViewer(tracks_resolution, camera_config.fps,
-                                                        Camera.get_init_params().depth_maximum_distance)
+                                                        self.__camera.get_camera().get_init_parameters().depth_maximum_distance)
         track_view_generator.set_camera_calibration(camera_config.calibration_parameters)
         image_track_ocv = np.zeros((tracks_resolution.height, tracks_resolution.width, 4),
                                 np.uint8)
@@ -202,8 +203,8 @@ class ComputerVision:
             if self.__camera.get_camera().grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
 
                 # -- Get the image
-                with self.__lock:
-                    self.__image_net = self.__camera.retrieve_image(sl.VIEW.LEFT)
+                with ComputerVision.__lock:
+                    self.__image_net = self.__camera.get_frame()
                 self.__run_signal = True
 
                 # -- Detection running on the other thread
@@ -211,7 +212,7 @@ class ComputerVision:
                     time.sleep(0.001)
 
                 # Wait for detections
-                with self.__lock:
+                with ComputerVision.__lock:
                     # -- Ingest detections
                     self.__camera.get_camera().ingest_custom_box_objects(self.__detections)
 
@@ -248,7 +249,7 @@ class ComputerVision:
 
                 # 2D rendering
                 np.copyto(image_left_ocv, 
-                          self.__camera.retrieve_image(sl.VIEW.LEFT, sl.MEM.CPU, display_resolution))
+                          self.__image_net)
                 cv_viewer.render_2D(image_left_ocv, image_scale, objects, obj_param.enable_tracking, label)
                 global_image = cv2.hconcat([image_left_ocv, image_track_ocv])
                 cv2.imshow("BIRA - Computer Vision", global_image)
@@ -266,8 +267,9 @@ class ComputerVision:
 
         return coordinate_dict
     
-    def exec_detection(self, label: str, duration: int=15):
-        self.object_detection(duration, lab.get_label_id(label))
+    def exec_detection(self, label: str, duration: int=float('inf')):
+        print(string_to_label(label))
+        self.object_detection(duration, string_to_label(label))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -275,14 +277,9 @@ if __name__ == "__main__":
     parser.add_argument('--svo', type=str, default=None, help='optional svo file')
     parser.add_argument('--img_size', type=int, default=416, help='inference size (pixels)')
     parser.add_argument('--conf_thres', type=float, default=0.4, help='object confidence threshold')
-    parser.add_argument('--cv', type=str, default=None, help='Showcase cv abilities of BIRA for specified duration (use inf for infinity)')
-    parser.add_argument('--stt', action="store_true", help='Run speech to text app')
-    parser.add_argument('--motors', help='Testing motors app')
 
     opt = parser.parse_args()
 
     cv = ComputerVision(opt)
-    cv.exec_detection("bouteille")
-
-
+    cv.exec_detection("bouteille", 15)
 

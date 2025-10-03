@@ -82,6 +82,8 @@ if __name__ == "__main__":
     cam = Camera()
     cam2 = Camera()
 
+    cam.open()
+
     print("WOww the singleton works bro!" if cam is cam2 else "What the helly...")
     
     with cam:
@@ -95,5 +97,10 @@ if __name__ == "__main__":
             key = cv2.waitKey(1)
             if key == 27:  # Press 'ESC' to exit
                 break
+    
+    if cam.get_frame() is None:
+        print("Camera released successfully.")
+    else :
+        print("Camera release failed.")
     
     cv2.destroyAllWindows()
