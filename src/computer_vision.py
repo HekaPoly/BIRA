@@ -25,6 +25,11 @@ class ComputerVision:
         self.__detections = None
         self.__opt = opt
         self.__camera = Camera()
+
+        print("Intializing Network(YOLO)...")
+        self.yolo = YOLO(opt.weights)
+        self.yolo.model.to('cuda')
+        self.yolo.model.eval()
     
     def __xywh2abcd(self, xywh):
         """Converts the bounding boxes from xywh format to abcd format
@@ -138,8 +143,47 @@ class ComputerVision:
         
         return closest_obj_id
     
-    def object_detection(self, duration: int, label: int = -1) -> dict:
-        """Opens the camera and searches for an object. It also displays the camera image with the bounding boxes during the process. The camera is closed afterwards.
+    def detect(self, frame, img_size, conf_thres=0.2, iou_thres=0.45):
+        """Static method to detect objects in a single frame using YOLOv8 model
+        Parameters:
+            frame (np.ndarray): The input image frame in BGRA format
+        Returns:
+            list[sl.CustomBoxObjectData]: Externally detected objects ingestable by ZED SDK 
+        """
+        objects = sl.Objects()
+        obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
+
+        img = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
+        det = self.yolo.predict(img, save=False, imgsz=img_size, conf=conf_thres,
+                        iou=iou_thres)[0].cpu().numpy().boxes
+
+        output = []
+        for det in det: #what is the purpose of i
+            xywh = det.xywh[0]
+
+            # Creating ingestable objects for the ZED SDK
+            obj = sl.CustomBoxObjectData()
+            obj.bounding_box_2d = ComputerVision.__xywh2abcd(xywh)
+            obj.label = det.cls
+            obj.probability = det.conf
+            obj.is_grounded = False
+            output.append(obj)
+        
+        print(output)
+
+        # -- Ingest detections
+        if output != []:
+            Camera().get_camera().ingest_custom_box_objects(output)
+            Camera().get_camera().retrieve_objects(objects, obj_runtime_param)
+            object_list = objects.object_list
+            return object_list
+        else:
+            print("No objects detected.")
+            return []
+
+
+    def _helper_object_detection(self, duration: int, label: int = -1) -> dict:
+        """Old method to detect objects and display them. Opens the camera and searches for an object. It also displays the camera image with the bounding boxes during the process. The camera is closed afterwards.
         Parameters:
             duration (int): Time given to search the object
             label (int): The integer corresponding to the object to find
@@ -281,5 +325,18 @@ if __name__ == "__main__":
     opt = parser.parse_args()
 
     cv = ComputerVision(opt)
-    cv.exec_detection("bouteille", 15)
 
+    cam = Camera()
+    cam.open()
+
+
+    with cam:
+        while True:
+            if (cam.grab()):
+                frame = cam.get_frame()
+                if frame is not None:
+                    cv.detect(frame, opt.img_size, opt.conf_thres)
+                
+            key = cv2.waitKey(1)
+            if key == 27:  # Press 'ESC' to exit
+                break
