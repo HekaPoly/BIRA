@@ -144,12 +144,6 @@ class ComputerVision:
         return closest_obj_id
     
     def detect(self, frame, img_size, conf_thres=0.2, iou_thres=0.45):
-        """Static method to detect objects in a single frame using YOLOv8 model
-        Parameters:
-            frame (np.ndarray): The input image frame in BGRA format
-        Returns:
-            list[sl.CustomBoxObjectData]: Externally detected objects ingestable by ZED SDK 
-        """
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
 
@@ -157,24 +151,12 @@ class ComputerVision:
         det = self.yolo.predict(img, save=False, imgsz=img_size, conf=conf_thres,
                         iou=iou_thres)[0].cpu().numpy().boxes
 
-        output = []
-        for det in det: #what is the purpose of i
-            xywh = det.xywh[0]
-
-            # Creating ingestable objects for the ZED SDK
-            obj = sl.CustomBoxObjectData()
-            obj.bounding_box_2d = ComputerVision.__xywh2abcd(xywh)
-            obj.label = det.cls
-            obj.probability = det.conf
-            obj.is_grounded = False
-            output.append(obj)
+        self.__detections = self.__detections_to_custom_box(det)
         
-        print(output)
-
         # -- Ingest detections
-        if output != []:
-            Camera().get_camera().ingest_custom_box_objects(output)
-            Camera().get_camera().retrieve_objects(objects, obj_runtime_param)
+        if self.__detections != []:
+            self.__camera.get_camera().ingest_custom_box_objects(self.__detections)
+            self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
             object_list = objects.object_list
             return object_list
         else:
@@ -328,7 +310,6 @@ if __name__ == "__main__":
 
     cam = Camera()
     cam.open()
-
 
     with cam:
         while True:
