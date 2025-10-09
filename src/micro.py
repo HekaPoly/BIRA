@@ -17,7 +17,7 @@ class Micro:
     def demarrer(self):
         """Démarre l'enregistrement"""
         if self.est_en_train:
-            print("⚠️ L'enregistrement est déjà en cours!")
+            print("L'enregistrement est déjà en cours!")
             return
         
         # Préparer la liste pour stocker l'audio
@@ -34,7 +34,7 @@ class Micro:
         
         self.flux.start()
         self.est_en_train = True
-        print("🎤 Enregistrement démarré!")
+        print("Enregistrement démarré!")
     
     def _recuperer_audio(self, donnees, frames, temps, status):
         """Fonction appelée automatiquement quand il y a du son"""
@@ -45,7 +45,7 @@ class Micro:
     def arreter(self):
         """Arrête l'enregistrement"""
         if not self.est_en_train:
-            print("⚠️ Aucun enregistrement en cours!")
+            print("Aucun enregistrement en cours!")
             return
         
         if self.flux:
@@ -58,11 +58,11 @@ class Micro:
             self.donnees_audio = np.concatenate(self.donnees_audio)
         
         self.est_en_train = False
-        print("⏹️ Enregistrement arrêté!")
+        print("Enregistrement arrêté!")
     
     def enregistrer(self, duree=5):
         """Enregistre automatiquement pendant X secondes"""
-        print(f"⏱️ Enregistrement de {duree} secondes...")
+        print(f"Enregistrement de {duree} secondes...")
         self.demarrer()
         sd.sleep(duree * 1000)  # Attendre X secondes
         self.arreter()
@@ -70,7 +70,7 @@ class Micro:
     def sauvegarder(self, nom_fichier="enregistrement.wav"):
         """Sauvegarde l'audio dans un fichier WAV"""
         if self.donnees_audio is None:
-            print("❌ Aucun enregistrement à sauvegarder!")
+            print("Aucun enregistrement à sauvegarder!")
             return
         
         with wave.open(nom_fichier, "wb") as fichier:
@@ -79,7 +79,7 @@ class Micro:
             fichier.setframerate(self.frequence)
             fichier.writeframes(self.donnees_audio.tobytes())
         
-        print(f"💾 Fichier sauvegardé: {nom_fichier}")
+        print(f"Fichier sauvegardé: {nom_fichier}")
     
     def duree(self):
         """Donne la durée de l'enregistrement"""
@@ -87,7 +87,7 @@ class Micro:
             return 0
         return len(self.donnees_audio) / self.frequence
 
-# 🎯 EXEMPLE D'UTILISATION SIMPLE
+#  EXEMPLE D'UTILISATION SIMPLE
 if __name__ == "__main__":
     # 1. Voir les micros disponibles
     print("📱 Périphériques audio disponibles:")
@@ -104,5 +104,5 @@ if __name__ == "__main__":
     mon_micro.sauvegarder("mon_audio.wav")
     
     # 5. Afficher les infos
-    print(f"🕒 Durée: {mon_micro.duree():.2f} secondes")
-    print(f"📊 Échantillons: {len(mon_micro.donnees_audio)}")
+    print(f"Durée: {mon_micro.duree():.2f} secondes")
+    print(f"Échantillons: {len(mon_micro.donnees_audio)}")
