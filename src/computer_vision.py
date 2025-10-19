@@ -74,13 +74,13 @@ class ComputerVision:
         return output
             
     
-    def detect(self, frame, img_size, conf_thres=0.2, iou_thres=0.45):
+    def detect(self, frame, conf_thres=0.2, iou_thres=0.45):
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
 
         img = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
         detections = self.yolo.predict(img, save=False, imgsz=self.__opt.img_size, conf=self.__opt.conf_thres,
-                        iou=self.__opt.iou_thres)[0].cpu().numpy().boxes
+                        iou=iou_thres)[0].cpu().numpy().boxes
 
         self.__detections = self.__detections_to_custom_box(detections)
         
