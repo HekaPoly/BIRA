@@ -114,7 +114,3 @@ if __name__ == "__main__":
                 frame = cam.get_frame()
                 if frame is not None:
                     print(cv.detect(frame))
-                
-            key = cv2.waitKey(1)
-            if key == 27:  # Press 'ESC' to exit
-                break
