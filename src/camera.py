@@ -32,6 +32,12 @@ class Camera:
         return self.__zed
         
     def open(self, init_params = None):
+        """Opens the zed camera if it is not openned already. The program will end if the camera can't be openned.
+        Parameters:
+            init_params (sl.InitParameters): Class containing the options used to initialize the sl.Camera object.
+        Returns: 
+            None
+        """
         if self.__zed.is_opened() is False:
 
             if init_params is None:
@@ -44,10 +50,15 @@ class Camera:
                 exit()
     
     def grab(self, runtime_params = sl.RuntimeParameters()):
+        """Grabs the latest images from the camera, rectify them, and compute the measurements based on the RuntimeParameters provided.
+        Parameters:
+            runtime_params (sl.RuntimeParameters): Contains parameters that defines the behavior of self.__zed.grab()
+        Returns:
+            ERROR_CODE: represents the result of the operation
+        """
         return self.__zed.grab(runtime_params)
 
     def get_frame(self, view = sl.VIEW.LEFT, memory = sl.MEM.CPU, resolution = sl.Resolution(0, 0)):
-        #Should grab be called here
         with Camera.__lock:
             if self.__zed.retrieve_image(self.__image, view, memory, resolution) == sl.ERROR_CODE.SUCCESS:
                 return self.__image.get_data()
@@ -58,7 +69,13 @@ class Camera:
         self.__zed.get_position(self.__camera_pose, sl.REFERENCE_FRAME.WORLD)
         return self.__camera_pose
     
-    def release(self):
+    def __release(self):
+        """Frees the memory allocated for the image
+        Parameters:
+        None
+        Returns:
+        None
+        """
         self.__image.free()
     
     def close(self):
@@ -73,7 +90,7 @@ class Camera:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.release()
+        self.__release()
         self.close()
     
 

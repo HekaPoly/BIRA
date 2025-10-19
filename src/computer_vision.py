@@ -74,7 +74,7 @@ class ComputerVision:
         return output
             
     
-    def detect(self, frame, conf_thres=0.2, iou_thres=0.45):
+    def detect(self, frame, iou_thres=0.45):
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
 
