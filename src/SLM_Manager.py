@@ -1,224 +1,273 @@
 """
-SLM Manager par Marcelo Zevallos Gavidia et Ryan Ajakane
-===========
+------------------------------------------------------------------------------------
+SLM Manager
+------------------------------------------------------------------------------------
+2025-10-22 v1.0 Marcelo Zevallos Gavidia, Ryan Ajakane et Zakaria Kerouani, création
+------------------------------------------------------------------------------------
+DESCRIPTION GÉNÉRALE
+------------------------------------------------------------------------------------
+Le module **SLM Manager** encapsule l’interaction avec un *Small Language Model*
+(SLM) local exécuté via Ollama. Il permet d’analyser une commande exprimée en
+langage naturel et d’en extraire les informations essentielles nécessaires au
+contrôle d’un système robotique ou d’une interface intelligente.
 
-Ce module encapsule l’appel à un Small Language Model (SLM) pour analyser une
-commande en langage naturel et extraire trois informations clés :
-- response        : feedback vocal à renvoyer à l’utilisateur,
-- target_object   : label de l’objet cible (doit exister dans labelDict côté vision),
-- obstacles       : liste de labels d’objets à éviter (idem).
+Le module effectue automatiquement les étapes suivantes :
+    1. Construction d’un *prompt* explicite à partir de la commande utilisateur.
+    2. Envoi de ce *prompt* au modèle via l’API HTTP d’Ollama.
+    3. Extraction et validation du premier objet JSON renvoyé par le modèle.
+    4. Normalisation des données (labels, statut, confiance).
+    5. Encapsulation du résultat dans la dataclass `Extraction`.
 
-Le flux est :
-    user_cmd (str) --(Formatter.build_prompt)--> prompt
-    prompt --(SLM generate)--> raw_text
-    raw_text --(Formatter.parse)--> dict brut
-    brut --(Formatter.postprocess)--> dict normalisé {response, target_object, obstacles, status, confidence}
-    --> dataclass Extraction
+Champs extraits :
+    - **response** : message ou feedback textuel à renvoyer à l’utilisateur.
+    - **target_object** : étiquette de l’objet cible (doit exister dans `labelDict`).
+    - **obstacles** : liste des objets à éviter.
+    - **status** : état global de l’analyse ("ok", "missing_target", "ambiguous", etc.).
+    - **confidence** : score de confiance (0.0 à 1.0).
 
-Notes :
-- Le `Formatter` est responsable du prompt, du parsing (JSON), de la normalisation
-  via vos labels connus et de la gestion des cas incomplets/ambigus.
-- Le SLM est chargé/déchargé dans cette classe et reste réutilisable entre appels.
+------------------------------------------------------------------------------------
+NOTES
+------------------------------------------------------------------------------------
+- Le `Formatter` gère la construction du prompt, le parsing JSON et la
+  normalisation des résultats.
+- Le `SLM_Manager` se charge de la communication avec Ollama et de
+  l’orchestration complète du flux d’analyse.
+- Ce module est conçu pour être intégré à un système plus large de perception
+  et de commande (ex. : bras robotisé ou agent conversationnel).
 """
-
-# TODO: Tester la classe SLM_Manager
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 import argparse
-
-# TODO: compléter la classe Formatter
-# from src.Formater import Formatter
+import requests
 
 # --------------------------------------------------------------------------------------
-# Données structurées
-# -------------------------------------------------------------------------------------
+#  Classe Formatter
+# --------------------------------------------------------------------------------------
+class Formatter:
+    """
+    Le `Formatter` sert à préparer le prompt envoyé au modèle, à extraire la
+    première structure JSON renvoyée, puis à normaliser les données pour produire
+    un dictionnaire cohérent avec les clés attendues par la classe `Extraction`.
+
+    Étapes :
+      1) build_prompt(user_cmd) : formate une consigne claire pour le SLM.
+      2) parse(raw_text) : isole le premier bloc JSON de la sortie texte brute.
+      3) postprocess(raw, user_cmd) : normalise et complète les champs manquants.
+    """
+
+    def build_prompt(self, user_cmd: str) -> str:
+        """
+        Construit un prompt explicite demandant au modèle d’extraire uniquement un JSON.
+
+        Parameters
+        ----------
+        user_cmd : str
+            Commande ou phrase en langage naturel saisie par l’utilisateur.
+
+        Returns
+        -------
+        str
+            Prompt à envoyer au modèle Ollama.
+        """
+        return (
+            "Tu es un extracteur d'informations. "
+            "Retourne UNIQUEMENT un JSON compact avec les clés suivantes : "
+            "response (str), target_object (str ou null), obstacles (liste de str), "
+            "status (ok/missing_target/ambiguous/empty), confidence (0..1). "
+            f"Texte : {user_cmd}\nJSON :"
+        )
+
+    def parse(self, raw_text: str) -> Dict[str, Any]:
+        """
+        Extrait le premier objet JSON valide contenu dans la sortie du modèle.
+
+        Parameters
+        ----------
+        raw_text : str
+            Texte brut renvoyé par le modèle.
+
+        Returns
+        -------
+        dict
+            Dictionnaire Python décodé à partir du JSON extrait.
+        """
+        start = raw_text.find("{")
+        end = raw_text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise ValueError("Aucun JSON détecté dans la sortie du modèle.")
+        return json.loads(raw_text[start:end + 1])
+
+    def postprocess(self, raw: Dict[str, Any], user_cmd: str) -> Dict[str, Any]:
+        """
+        Normalise les champs du dictionnaire brut pour assurer la cohérence du schéma.
+
+        Returns
+        -------
+        dict
+            Dictionnaire contenant les champs normalisés : response, target_object,
+            obstacles, status et confidence.
+        """
+        return {
+            "response": raw.get("response", "D'accord."),
+            "target_object": raw.get("target_object"),
+            "obstacles": raw.get("obstacles", []),
+            "status": raw.get("status", "ok"),
+            "confidence": float(raw.get("confidence", 0.5)),
+        }
+
+# --------------------------------------------------------------------------------------
+#  Classe Extraction
+# --------------------------------------------------------------------------------------
 @dataclass
 class Extraction:
     """
-    Sortie structurée renvoyée par `SLM_Manager.analyze_command`.
+    Représente la sortie structurée d'une analyse de commande.
 
-    Attributes
-    ----------
+    Attributs
+    ---------
     response : str
-        Feedback vocal prêt à énoncer à l’utilisateur.
+        Message vocal ou textuel à retourner à l’utilisateur.
     target_object : Optional[str]
-        Label exact de l’objet cible (ex. 'car'), ou None si absent/indéterminé.
+        Nom exact de l’objet cible (ou None si non détecté).
     obstacles : List[str]
-        Liste des labels d’objets obstacles (peut être vide).
+        Liste des obstacles à éviter.
     status : str
-        Statut de l’analyse : "ok" | "missing_target" | "ambiguous" | "empty".
-    confidence : float, optional
-        Score grossier (0..1) indiquant la confiance, par défaut 0.5.
+        Statut global de l’analyse : "ok", "missing_target", "ambiguous", "empty".
+    confidence : float
+        Niveau de confiance entre 0 et 1.
     """
+
     response: str
     target_object: Optional[str]
-    obstacle: Optional[str]
+    obstacles: List[str]
     status: str
     confidence: float = 0.5
 
     def to_payload(self) -> Dict[str, Any]:
         """
-        Représentation simple (dict) attendue par les couches aval.
+        Retourne une version simplifiée du résultat pour un usage en aval (API, robot…)
         """
         return {
             "response": self.response,
             "target_object": self.target_object,
-            "obstacle": self.obstacle,
+            "obstacles": self.obstacles,
         }
 
 # --------------------------------------------------------------------------------------
-# Gestionnaire SLM
+#  Classe SLM_Manager
 # --------------------------------------------------------------------------------------
 class SLM_Manager:
     """
-    Gère le modèle de langage (chargement, génération) et orchestre l’analyse.
+    Gère la communication avec le modèle Ollama et orchestre le pipeline complet :
+      1) Création du prompt via Formatter
+      2) Appel HTTP à Ollama pour générer la réponse
+      3) Parsing et post-traitement du JSON
+      4) Conversion en objet `Extraction`
 
-    Paramètres
-    ----------
-    model_name : str
-        Identifiant du modèle Hugging Face (ou chemin local).
-    device : Optional[str]
-        "cuda" si disponible sinon "cpu". Si None, auto-détection.
-    formatter : Optional[Formatter]
-        Instance de Formatter. Si None, une instance par défaut est créée.
-    max_new_tokens : int
-        Longueur max de génération du SLM.
-    temperature : float
-        Température d’échantillonnage (créativité).
-
-    Usage
-    -----
+    Exemple d’utilisation :
+    -----------------------
     >>> mgr = SLM_Manager()
     >>> mgr.load_model()
-    >>> ext = mgr.analyze_command("Attrape la car et évite le bus.")
+    >>> ext = mgr.analyze_command("Attrape la voiture et évite le bus.")
     >>> print(ext.to_payload())
     """
 
-    def __init__(self,
-                 model_name="meta-llama/Llama-3.2-1B",
-                 device="cuda" if torch.cuda.is_available() else "cpu",
-                 # formatter: Optional[Formatter] = None,
-                 max_new_tokens: int = 192,
-                 temperature: float = 0.4):
-        """
-        Initialize the SLM Manager with a Llama 3.2 model.
-
-        Args:
-            model_name (str): Hugging Face model ID or local path.
-            device (str): Device to run the model on ('cuda' or 'cpu').
-        """
+    def __init__(
+        self,
+        model_name: str = "llama3.2",                       # Nom du modèle Ollama local
+        api_url: str = "http://localhost:11434/api/generate",
+        formatter: Optional[Formatter] = None,
+        max_new_tokens: int = 192,
+        temperature: float = 0.4,
+    ):
         self.model_name = model_name
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        # self.formatter = Formatter()
+        self.api_url = api_url
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
-        self.model = None
-        self.model = None
-        self.tokenizer = None
+        self.formatter = formatter or Formatter()
 
-    # -------------------------- Modèle --------------------------
+    # ------------------------------------------------------------------
     def load_model(self):
         """
-        Charge le tokenizer et le modèle en mémoire (sur GPU si dispo).
+        Vérifie que le serveur Ollama est accessible (aucun téléchargement HF).
         """
-        print(f"Loading model: {self.model_name} on {self.device}")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-            low_cpu_mem_usage=True,
-        ).to(self.device)
-        print("Model loaded successfully.")
+        r = requests.post(
+            self.api_url,
+            json={"model": self.model_name, "prompt": "ping", "stream": False, "num_predict": 1},
+            timeout=15,
+        )
+        r.raise_for_status()
+        print("Ollama accessible et prêt.")
 
-    # -------------------------- Génération --------------------------
-    @torch.inference_mode()
+    # ------------------------------------------------------------------
     def generate_response(self, prompt: str) -> str:
         """
-        Lance une génération de texte à partir d'un prompt.
+        Envoie un prompt au modèle Ollama et récupère la réponse textuelle complète.
 
         Parameters
         ----------
         prompt : str
-            Prompt d'instruction construit par le Formatter.
+            Instruction ou question à traiter.
 
         Returns
         -------
         str
-            Texte complet renvoyé par le modèle (incluant potentiellement du bruit).
+            Sortie textuelle complète produite par le modèle.
         """
-        if not self.model or not self.tokenizer:
-            raise ValueError("Model not loaded. Call load_model() first.")
-
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=self.max_new_tokens,
-            temperature=self.temperature,
-            do_sample=True,
-            eos_token_id=self.tokenizer.eos_token_id
+        r = requests.post(
+            self.api_url,
+            json={
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False,
+                "num_predict": self.max_new_tokens,
+                "temperature": self.temperature,
+            },
+            timeout=60,
         )
-        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        return response
+        r.raise_for_status()
+        data = r.json()
+        return data.get("response", "")
 
-    # -------------------------- Chat debug --------------------------
-    def chat(self):
-        """
-        Boucle interactive (debug). Tape 'quit' pour sortir.
-        """
-        print("Starting chat with Llama 3.2. Type 'quit' to exit.")
-        while True:
-            user_input = input("You: ")
-            if user_input.lower() == "quit":
-                break
-            response = self.generate_response(user_input)
-            print(f"Llama 3.2: {response}")
-
-    # -------------------------- Chaîne complète --------------------------
+    # ------------------------------------------------------------------
     def analyze_command(self, user_cmd: str) -> Extraction:
         """
-        Analyse une commande NL et renvoie une `Extraction`.
-
-        Étapes :
-          1) Construction du prompt via `Formatter.build_prompt(user_cmd)`.
-          2) Appel modèle via `generate_response(prompt)`.
-          3) Parsing robuste du premier JSON via `Formatter.parse`.
-          4) Normalisation + statut via `Formatter.postprocess`.
-          5) Conversion en dataclass `Extraction`.
+        Analyse une commande en langage naturel pour en extraire les informations clés.
 
         Parameters
         ----------
         user_cmd : str
-            Commande en langage naturel (ex. "Attrape la car et évite le bus.")
+            Commande donnée par l’utilisateur (ex. "Attrape la voiture et évite le bus.")
 
         Returns
         -------
         Extraction
-            Résultat normalisé et prêt à utiliser.
+            Résultat structuré de l’analyse.
         """
         prompt = self.formatter.build_prompt(user_cmd)
-        raw_text = self._generate(prompt)
+        raw_text = self.generate_response(prompt)
         try:
             raw = self.formatter.parse(raw_text)
         except Exception:
             raw = {
-                   "response": "Peux-tu reformuler en précisant l’objet cible ?",
-                   "target_object": None,
-                   "obstacles": []
-                   }
+                "response": "Peux-tu reformuler en précisant l’objet cible ?",
+                "target_object": None,
+                "obstacles": [],
+                "status": "ambiguous",
+                "confidence": 0.3,
+            }
         data = self.formatter.postprocess(raw, user_cmd)
         return Extraction(**data)
 
 # --------------------------------------------------------------------------------------
-# Main temporaire
+#  Exécution directe du script
 # --------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Analyse NL -> labels connus (labelDict)")
+    parser = argparse.ArgumentParser(description="Analyse de commandes NL -> labels connus (labelDict)")
     parser.add_argument("command", type=str, nargs="*", help="Commande en langage naturel")
-    parser.add_argument("--model", dest="model", default="meta-llama/Llama-3.2-1B")
+    parser.add_argument("--model", dest="model", default="llama3.2")
     args = parser.parse_args()
 
     cmd = " ".join(args.command).strip()
@@ -226,7 +275,7 @@ if __name__ == "__main__":
     mgr.load_model()
 
     if not cmd:
-        print("Exemple: python slm_manager.py 'Attrape la car et évite le bus.'")
+        print('Exemple : python slm_manager.py "Attrape la voiture et évite le bus."')
     else:
         extraction = mgr.analyze_command(cmd)
         print(json.dumps(extraction.to_payload(), ensure_ascii=False))
