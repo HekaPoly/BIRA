@@ -3,106 +3,174 @@ import numpy as np
 import wave
 
 class Micro:
-    def __init__(self, frequence=44100, duree_max=10, peripherique=None):
-        # Paramètres de base
-        self.frequence = frequence      # Qualité audio (Hz)
-        self.duree_max = duree_max      # Durée maximum d'enregistrement
-        self.peripherique = peripherique # Microphone à utiliser
-        
-        # État de l'enregistrement
-        self.est_en_train = False
-        self.donnees_audio = None
-        self.flux = None
-    
-    def demarrer(self):
-        """Démarre l'enregistrement"""
-        if self.est_en_train:
-            print("⚠️ L'enregistrement est déjà en cours!")
+    """
+    A class to manage microphone recording, playback, and basic audio analysis.
+
+    """
+
+    def __init__(self, frequency=44100, max_duration=10, device=None):
+        """
+        Initialize the Micro class with the given recording parameters.
+
+        Parameters
+        ----------
+        frequency : int, 
+            Sampling frequency in Hz.
+        max_duration : int
+            Maximum recording time in seconds.
+        device : int or None
+            Audio input device index.
+        """
+        self.frequency = frequency
+        self.max_duration = max_duration
+        self.device = device
+
+        self.is_recording = False
+        self.audio_data = None
+        self.stream = None
+
+    def start(self):
+        """
+        Start recording audio from the selected input device.
+        If recording is already in progress, the method does nothing.
+        The audio stream runs asynchronously using a callback.
+        """
+        if self.is_recording:
+            print("Recording is already in progress.")
             return
-        
-        # Préparer la liste pour stocker l'audio
-        self.donnees_audio = []
-        
-        # Créer le flux audio
-        self.flux = sd.InputStream(
-            samplerate=self.frequence,
-            channels=1,           # 1 = mono, 2 = stéréo
-            dtype="int16",        # Format des données
-            device=self.peripherique,
-            callback=self._recuperer_audio
+
+        self.audio_data = []
+
+        self.stream = sd.InputStream(
+            samplerate=self.frequency,
+            channels=1,
+            dtype="int16",
+            device=self.device,
+            callback=self._capture_audio
         )
-        
-        self.flux.start()
-        self.est_en_train = True
-        print("🎤 Enregistrement démarré!")
-    
-    def _recuperer_audio(self, donnees, frames, temps, status):
-        """Fonction appelée automatiquement quand il y a du son"""
+
+        self.stream.start()
+        self.is_recording = True
+        print("Recording started.")
+
+    def _capture_audio(self, data, frames, time, status):
+        """
+        Internal callback function to capture audio chunks from the stream.
+
+        Parameters
+        ----------
+        data : numpy.ndarray
+            The audio data buffer received from the microphone.
+        frames : int
+            The number of frames in the current buffer.
+        time : CData
+            Timing information from the audio driver.
+        status : sounddevice.CallbackFlags
+            Status flags.
+        """
         if status:
             print(f"Status: {status}")
-        self.donnees_audio.append(donnees.copy())
-    
-    def arreter(self):
-        """Arrête l'enregistrement"""
-        if not self.est_en_train:
-            print("⚠️ Aucun enregistrement en cours!")
-            return
-        
-        if self.flux:
-            self.flux.stop()
-            self.flux.close()
-            self.flux = None
-        
-        # Convertir toutes les données en un seul tableau
-        if self.donnees_audio:
-            self.donnees_audio = np.concatenate(self.donnees_audio)
-        
-        self.est_en_train = False
-        print("⏹️ Enregistrement arrêté!")
-    
-    def enregistrer(self, duree=5):
-        """Enregistre automatiquement pendant X secondes"""
-        print(f"⏱️ Enregistrement de {duree} secondes...")
-        self.demarrer()
-        sd.sleep(duree * 1000)  # Attendre X secondes
-        self.arreter()
-    
-    def sauvegarder(self, nom_fichier="enregistrement.wav"):
-        """Sauvegarde l'audio dans un fichier WAV"""
-        if self.donnees_audio is None:
-            print("❌ Aucun enregistrement à sauvegarder!")
-            return
-        
-        with wave.open(nom_fichier, "wb") as fichier:
-            fichier.setnchannels(1)      # Mono
-            fichier.setsampwidth(2)      # 16-bit
-            fichier.setframerate(self.frequence)
-            fichier.writeframes(self.donnees_audio.tobytes())
-        
-        print(f"💾 Fichier sauvegardé: {nom_fichier}")
-    
-    def duree(self):
-        """Donne la durée de l'enregistrement"""
-        if self.donnees_audio is None:
-            return 0
-        return len(self.donnees_audio) / self.frequence
+        self.audio_data.append(data.copy())
 
-# 🎯 EXEMPLE D'UTILISATION SIMPLE
+    def stop(self):
+        """
+        Stop the audio recording and finalize the data buffer.
+
+        Notes
+        -----
+        - If no recording is in progress, the method prints a message.
+        - After stopping, the recorded audios are concatenated into a single array.
+        """
+        if not self.is_recording:
+            print("No recording is currently in progress!")
+            return
+
+        if self.stream:
+            self.stream.stop()
+            self.stream.close()
+            self.stream = None
+
+        if self.audio_data:
+            self.audio_data = np.concatenate(self.audio_data)
+
+        self.is_recording = False
+        print("Recording stopped.")
+
+    def record(self, duration=5):
+        """
+        Record audio for a fixed duration.
+
+        Parameters
+        ----------
+        duration : int or float
+            Recording time in seconds (default is 5).
+        """
+        print(f"Recording for {duration} seconds...")
+        self.start()
+        sd.sleep(int(duration * 1000))
+        self.stop()
+
+    def save(self, filename="recording.wav"):
+        """
+        Save the recorded audio data to a WAV file.
+
+        Parameters
+        ----------
+        filename : str, optional
+            The name of the output file (default is "recording.wav").
+        """
+        if self.audio_data is None:
+            print("No recording to save!")
+            return
+
+        with wave.open(filename, "wb") as file:
+            file.setnchannels(1)
+            file.setsampwidth(2)  # 16-bit PCM
+            file.setframerate(self.frequency)
+            file.writeframes(self.audio_data.tobytes())
+
+        print(f"File saved: {filename}")
+
+    def duration(self):
+        """
+        Get the duration of the recorded audio.
+
+        Returns
+        -------
+        float
+            The duration of the recording in seconds, or 0 if no data is available.
+        """
+        if self.audio_data is None:
+            return 0
+        return len(self.audio_data) / self.frequency
+
+    def get_volume(self):
+        """
+        Estimate the average volume (in decibels).
+
+        Returns
+        -------
+        float or None
+            The average RMS volume level in decibels (dB), or None if no data is available.
+        """
+        if self.audio_data is None:
+            print("No audio data available!")
+            return None
+
+        audio_float = self.audio_data.astype(np.float32) / 32768.0
+        rms = np.sqrt(np.mean(np.square(audio_float)))
+        db = 20 * np.log10(rms + 1e-6)
+
+        print(f"Average volume: {db:.2f} dB")
+        return db
+
+
 if __name__ == "__main__":
-    # 1. Voir les micros disponibles
-    print("📱 Périphériques audio disponibles:")
-    print(sd.query_devices())
-    print("\n" + "="*50 + "\n")
-    
-    # 2. Créer un micro
-    mon_micro = Micro(frequence=16000, duree_max=10)
-    
-    # 3. Enregistrer 3 secondes
-    mon_micro.enregistrer(duree=3)
-    
-    # 4. Sauvegarder
-    mon_micro.sauvegarder("mon_audio.wav")
-    
-    # 5. Afficher les infos
-    print(f"🕒 Durée: {mon_micro.duree():.2f} secondes")
-    print(f"📊 Échantillons: {len(mon_micro.donnees_audio)}")
+    my_mic = Micro(frequency=16000, max_duration=10)
+
+    my_mic.record(duration=3)
+    my_mic.save("my_audio.wav")
+
+    print(f"Duration: {my_mic.duration():.2f} seconds")
+    print(f"Samples: {len(my_mic.audio_data)}")
+    my_mic.get_volume()
