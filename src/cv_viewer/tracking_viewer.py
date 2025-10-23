@@ -7,9 +7,12 @@ import pyzed.sl as sl
 import math
 from collections import deque
 
+
+
 # ----------------------------------------------------------------------
-#       2D LEFT VIEW                                
+#       2D LEFT VIEW
 # ----------------------------------------------------------------------
+
 
 def cvt(pt, scale):
     """
@@ -18,6 +21,7 @@ def cvt(pt, scale):
     out = [pt[0] * scale[0], pt[1] * scale[1]]
     return out
 
+
 def get_image_position(bounding_box_image, img_scale):
     out_position = np.zeros(2)
     out_position[0] = (bounding_box_image[0][0] + (bounding_box_image[2][0] - bounding_box_image[0][0]) * 0.5) * \
@@ -25,6 +29,7 @@ def get_image_position(bounding_box_image, img_scale):
     out_position[1] = (bounding_box_image[0][1] + (bounding_box_image[2][1] - bounding_box_image[0][1]) * 0.5) * \
                       img_scale[1]
     return out_position
+
 
 def render_2D(left_display, img_scale, objects, is_tracking_on, label):
     overlay = left_display.copy()
@@ -75,6 +80,7 @@ def render_2D(left_display, img_scale, objects, is_tracking_on, label):
 
     # Here, overlay is as the left image, but with opaque masks on each detected objects
     cv2.addWeighted(left_display, 0.7, overlay, 0.3, 0.0, left_display)
+
 
 # ----------------------------------------------------------------------
 #       2D TRACKING VIEW
@@ -230,6 +236,7 @@ class TrackingViewer:
             print("Unhandled argument type")
         return out
 
+
 class TrackPoint:
     def __init__(self, pos_):
         self.x = pos_[0]
@@ -238,6 +245,7 @@ class TrackPoint:
 
     def get_xyz(self):
         return [self.x, self.y, self.z]
+
 
 class Tracklet:
     def __init__(self, obj_, type_, timestamp_):

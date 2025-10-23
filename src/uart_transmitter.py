@@ -8,12 +8,12 @@ from serial.tools import list_ports
 from time import sleep
 
 class UARTTransmitter:
-    def __init__(self, DEFAULT_BAUD_RATE = 115200, VELOCITY_SHIFT = 3, ANGLE_SHIFT = 16, NUMBER_OF_BYTES = 4, UART_INIT_DELAY = 2):
-        self.DEFAULT_BAUD_RATE = DEFAULT_BAUD_RATE
-        self.VELOCITY_SHIFT = VELOCITY_SHIFT
-        self.ANGLE_SHIFT = ANGLE_SHIFT
-        self.NUMBER_OF_BYTES = NUMBER_OF_BYTES
-        self.UART_INIT_DELAY = UART_INIT_DELAY
+    def __init__(self, default_baud_rate = 115200, velocity_shift = 3, angle_shift = 16, number_of_bytes = 4, uart_init_delay = 2):
+        self.default_baud_rate = default_baud_rate
+        self.velocity_shift = velocity_shift
+        self.angle_shift = angle_shift
+        self.number_of_bytes = number_of_bytes
+        self.uart_init_delay = uart_init_delay
 
     def get_serial_ports_list(self) -> list:
         """ 
@@ -43,22 +43,25 @@ class UARTTransmitter:
 
         Parameters:
             angle (int): The angle to send to the microcontroller. Must be in between 0 and 360.
+            motor_id (int): The ID of the motor to control.
 
         Returns:
             dataSuccessfullySent (bool): Result of data transmission (Successful or Unsuccessful).
         """
+        velocity = 75
+        velocity <<= self.velocity_shift
+        
         angle =  int((2.15 * int(angle) + 360) % 360)
-        assert(angle >= 0 and angle <= 360)
+        if angle < 0 or angle > 360:
+            raise Exception("Erreur: l'angle doit etre entre 0 et 360")
+        
         serial_ports = self.get_serial_ports_list()
         if len(serial_ports) != 1:
             raise Exception("Erreur: il ne doit y avoir qu'un seul port serie connecte")
         
         serial_port = serial_ports[0]
 
-        velocity = 75
-        velocity <<= self.VELOCITY_SHIFT
-
-        angle <<= self.ANGLE_SHIFT
+        angle <<= self.angle_shift
         data_successfully_sent = False
         data = 0x00000000
         data += angle
@@ -67,7 +70,7 @@ class UARTTransmitter:
 
         ser = Serial(
                         port            = serial_port,
-                        baudrate        = self.DEFAULT_BAUD_RATE,
+                        baudrate        = self.default_baud_rate,
                         timeout         = None,
                         write_timeout   = 0,
                         xonxoff         = False,
@@ -79,10 +82,10 @@ class UARTTransmitter:
             print(e)
             print("Unable to open serial communication port. Try selecting a different port.")
 
-        byte_data = data.to_bytes(self.NUMBER_OF_BYTES, byteorder='little')
+        byte_data = data.to_bytes(self.number_of_bytes, byteorder='little')
 
         try:
-            sleep(self.UART_INIT_DELAY)
+            sleep(self.uart_init_delay)
             
             ser.write(byte_data)
             data_successfully_sent = True

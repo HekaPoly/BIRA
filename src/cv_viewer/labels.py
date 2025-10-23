@@ -79,8 +79,8 @@ labelDict = {0: 'person',
  78: 'hair drier',
  79: 'toothbrush'}
 
+
 def get_label_id(n: str):
     for i in labelDict:
         if labelDict[i] == n:
             return i
-        
