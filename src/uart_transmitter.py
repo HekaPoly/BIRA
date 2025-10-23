@@ -48,9 +48,8 @@ class UARTTransmitter:
         Returns:
             dataSuccessfullySent (bool): Result of data transmission (Successful or Unsuccessful).
         """
-        velocity = 75
-        velocity <<= self.velocity_shift
-        
+        data_successfully_sent = False
+
         angle =  int((2.15 * int(angle) + 360) % 360)
         if angle < 0 or angle > 360:
             raise Exception("Erreur: l'angle doit etre entre 0 et 360")
@@ -61,8 +60,11 @@ class UARTTransmitter:
         
         serial_port = serial_ports[0]
 
+        velocity = 75
+        velocity <<= self.velocity_shift
+
         angle <<= self.angle_shift
-        data_successfully_sent = False
+
         data = 0x00000000
         data += angle
         data += motor_id
