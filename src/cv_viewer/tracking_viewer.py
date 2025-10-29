@@ -38,7 +38,7 @@ def render_2D(left_display, img_scale, objects, is_tracking_on, label):
     for obj in objects.object_list:
         # filtre
 
-        if obj.raw_label != label and label != -1: continue
+        if label is not None and obj.raw_label != label and label != -1: continue
 
         if render_object(obj, is_tracking_on):
             base_color = generate_color_id_u(obj.id)
