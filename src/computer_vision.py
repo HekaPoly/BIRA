@@ -85,14 +85,10 @@ class ComputerVision:
         self.__detections = self.__detections_to_custom_box(detections)
         
         # -- Ingest detections
-        if self.__detections != []:
-            Camera().get_camera().ingest_custom_box_objects(self.__detections)
-            Camera().get_camera().retrieve_objects(objects, obj_runtime_param)
-            object_list = objects.object_list
-            return object_list
-        else:
-            print("No objects detected.")
-            return []
+        Camera().get_camera().ingest_custom_box_objects(self.__detections)
+        Camera().get_camera().retrieve_objects(objects, obj_runtime_param)
+        return objects
+        
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
