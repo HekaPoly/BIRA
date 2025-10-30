@@ -3,74 +3,135 @@ import numpy as np
 import wave
 
 class Micro:
-    def __init__ (self, sampling_frequency, maximum_duration, peripheral_device):
-        self.sampling_frequency = sampling_frequency
-        self.maximum_duration = maximum_duration
-        self.peripheral_device = peripheral_device
-        self.recording = None
-
-    def start_recording(self):
-        self.recording = sd.InputStream(
-            samplerate = self.sample_rate,
-            channels = self.channels,
-            dtype = "int16",
-            blocksize = block_size,
-            device = self.device,
-            callback = callback
-        )
-        self.recording.start()
-        print("Recording started")
-    
-    def stop_recording(self):
-        if self.recording != None:
-            self.recording.stop()
-            self.recording.close()
-            self.recording = None
-        print("Recording stopped")
-    
-    def save_recording(self, filename):
-        if self.recording is None:
-            raise ValueError("No recording to save")
-
-        with wave.open(filename, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(self.sample_rate)
-            wf.writeframes(self.recording.tobytes())
-        print(f"Filename saved as {filename}")
-    
-    def get_stream(self):
-        if self.recording is None:
-            self.recording = sd.InputStream(
-                samplerate = self.sample_rate,
-                channels = 1,
-                dtype = "int16",
-                device = self.device
-            )
-        return self.recording
-
-    def get_volume(self):
+    def __init__(self, frequency=44100, max_duration=10, device=None):
         """
-        Estimate the average volume (in decibels).
+        Initialize the Micro object.
 
-        Returns
-        -------
-        float or None
-            The average RMS volume level in decibels (dB), or None if no data is available.
+        Args:
+            frequency (int): Sampling rate in Hz (default: 44100).
+            max_duration (int): Maximum duration of recording in seconds.
+            device (str or None): Name or ID of the audio input device.
+        """
+        self.frequency = frequency
+        self.max_duration = max_duration
+        self.device = device
+        self.is_recording = False
+        self.audio_data = None
+        self.stream = None
+
+    def start(self):
+        """
+        Start recording audio from the selected device.
+        Does nothing if a recording is already in progress.
+        """
+        if self.is_recording:
+            print("Recording is already in progress")
+            return
+
+        self.audio_data = []
+
+        self.stream = sd.InputStream(
+            samplerate=self.frequency,
+            channels=1,
+            dtype="int16",
+            device=self.device,
+            callback=self._capture_audio
+        )
+
+        self.stream.start()
+        self.is_recording = True
+        print("Recording started")
+
+    def _capture_audio(self, data, frames, time, status):
+        """
+        Internal callback function used by sounddevice to collect audio data.
+
+        Args:
+            data (numpy.ndarray): Audio buffer received from the device.
+            frames (int): Number of frames in the buffer.
+            time (CData): Timing information from sounddevice.
+            status (CallbackFlags): Stream status (e.g., underflow/overflow).
+        """
+        if status:
+            print(f"Status: {status}")
+        self.audio_data.append(data.copy())
+
+    def stop(self):
+        """
+        Stop the current recording and finalize the audio data.
+        Does nothing if no recording is active.
+        """
+        if not self.is_recording:
+            print("No recording in progress")
+            return
+        
+        if self.stream:
+            self.stream.stop()
+            self.stream.close()
+            self.stream = None
+
+        if self.audio_data:
+            self.audio_data = np.concatenate(self.audio_data)
+        self.is_recording = False
+        print("Recording stopped")
+
+    def record(self, duration=5):
+        """
+        Record audio automatically for a given duration.
+
+        Args:
+            duration (int): Duration of the recording in seconds (default: 5).
+        """
+        print(f"Recording for {duration} seconds")
+        self.start()
+        sd.sleep(duration * 1000)
+        self.stop()
+
+    def save(self, filename="recording.wav"):
+        """
+        Save the recorded audio as a WAV file.
+
+        Args:
+            filename (str): Output file name (default: "recording.wav").
         """
         if self.audio_data is None:
-            print("No audio data available!")
-            return None
+            print("No recording to save")
+            return
+        
+        with wave.open(filename, "wb") as file:
+            file.setnchannels(1)
+            file.setsampwidth(2)
+            file.setframerate(self.frequency)
+            file.writeframes(self.audio_data.tobytes())
+        print(f"File saved: {filename}")
 
-        audio_float = self.audio_data.astype(np.float32) / 32768.0
-        rms = np.sqrt(np.mean(np.square(audio_float)))
-        db = 20 * np.log10(rms + 1e-6)
+    def duration(self):
+        """
+        Calculate the duration of the current recording.
 
-        print(f"Average volume: {db:.2f} dB")
-        return db
+        Returns:
+            float: Duration of the recording in seconds.
+        """
+        if self.audio_data is None:
+            return 0
+        return len(self.audio_data) / self.frequency
     
-    
+    def volume(self):
+        """
+        Compute the average volume of the recording using RMS (Root Mean Square).
+
+        Returns:
+            float: Average volume level (0.0 to 1.0).
+        """
+        if self.audio_data is None or len(self.audio_data) == 0:
+            return 0.0
+        normalized = self.audio_data.astype(np.float32) / 32768.0
+        rms = np.sqrt(np.mean(normalized ** 2))
+        return rms
+
 if __name__ == "__main__":
-    micro = Micro(44100, 5)
-    micro.start_recording()
-    micro.save_recording("test.wav")
+    my_micro = Micro(frequency=16000, max_duration=10)
+    my_micro.record(duration=3)
+    my_micro.save("my_audio.wav")
+    print(f"Duration: {my_micro.duration():.2f} seconds")
+    print(f"Average volume: {my_micro.volume():.3f}")
