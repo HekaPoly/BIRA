@@ -49,6 +49,27 @@ class Micro:
             )
         return self.recording
 
+    def get_volume(self):
+        """
+        Estimate the average volume (in decibels).
+
+        Returns
+        -------
+        float or None
+            The average RMS volume level in decibels (dB), or None if no data is available.
+        """
+        if self.audio_data is None:
+            print("No audio data available!")
+            return None
+
+        audio_float = self.audio_data.astype(np.float32) / 32768.0
+        rms = np.sqrt(np.mean(np.square(audio_float)))
+        db = 20 * np.log10(rms + 1e-6)
+
+        print(f"Average volume: {db:.2f} dB")
+        return db
+    
+    
 if __name__ == "__main__":
     micro = Micro(44100, 5)
     micro.start_recording()
