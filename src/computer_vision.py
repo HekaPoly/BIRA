@@ -75,6 +75,13 @@ class ComputerVision:
             
     
     def detect(self, frame, iou_thres=0.45):
+        """Detects the objects present in the frame given.
+        Parameters:
+            frame (np.array): The image
+            iou_thres (float): The intersection Over Union (IoU)
+        Results:
+            sl.Objects: The object containing the results of the detection.
+        """
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
 

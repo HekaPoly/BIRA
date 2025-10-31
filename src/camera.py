@@ -32,7 +32,9 @@ class Camera:
         return self.__zed
         
     def open(self, init_params = None):
-        """Opens the zed camera if it is not openned already. The program will end if the camera can't be openned.
+        """Opens the zed camera.
+        
+        If it is not openned already. The program will end if the camera can't be openned.
         Parameters:
             init_params (sl.InitParameters): Class containing the options used to initialize the sl.Camera object.
         Returns: 
@@ -54,11 +56,19 @@ class Camera:
         Parameters:
             runtime_params (sl.RuntimeParameters): Contains parameters that defines the behavior of self.__zed.grab()
         Returns:
-            ERROR_CODE: represents the result of the operation
+            ERROR_CODE: Describes if the grab was successfull or not
         """
         return self.__zed.grab(runtime_params)
 
     def get_frame(self, view = sl.VIEW.LEFT, memory = sl.MEM.CPU, resolution = sl.Resolution(0, 0)):
+        """Retrieves images from the camera.
+        Parameters:
+            view (sl.VIEW): The image you want, left lens or right lens, rectified or unrectified and more
+            memory (sl.MEM): The memory the image should be allocated
+            resolution (sl.Resolution):  The Resolution you want for the image
+        Returns:
+            np.array or None: Returns a np.array representing the image if the retrieve was successfull, otherwise returns None
+        """
         with Camera.__lock:
             if self.__zed.retrieve_image(self.__image, view, memory, resolution) == sl.ERROR_CODE.SUCCESS:
                 return self.__image.get_data()
@@ -66,6 +76,12 @@ class Camera:
                 return None
     
     def get_position(self):
+        """Retrieves the estimated position and orientation of the camera with reference to the world frame.
+        Parameters:
+            None
+        Returns:
+            sl.Pose: Object containing positional tracking data giving the position and orientation of the camera in 3D space 
+        """
         self.__zed.get_position(self.__camera_pose, sl.REFERENCE_FRAME.WORLD)
         return self.__camera_pose
     

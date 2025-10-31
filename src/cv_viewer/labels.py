@@ -81,6 +81,12 @@ labelDict = {0: 'person',
 
 
 def get_label_id(n: str):
+    """Finds the id for the label.
+        Parameters:
+            n (str): The name of the object
+        Returns:
+            int : The integer corresponding to the label
+    """
     for i in labelDict:
         if labelDict[i] == n:
             return i
