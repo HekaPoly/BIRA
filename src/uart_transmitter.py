@@ -54,7 +54,7 @@ class UARTTransmitter:
         Returns:
             None.
         """
-        angle =  int((2.15 * int(angle) + 360) % 360)
+        angle =  int(angle) % 360
         if angle < 0 or angle > 360:
             raise Exception("Error: The angle must be between 0 and 360 degrees.")
         
