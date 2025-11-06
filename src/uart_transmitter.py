@@ -8,7 +8,12 @@ from serial.tools import list_ports
 from time import sleep
 
 class UARTTransmitter:
-    def __init__(self, default_baud_rate = 115200, velocity_shift = 3, angle_shift = 16, bytes = 4, uart_init_delay = 2):
+    def __init__(self, 
+                 default_baud_rate = 115200, 
+                 velocity_shift = 3, 
+                 angle_shift = 16, 
+                 bytes = 4, 
+                 uart_init_delay = 2):
         self.default_baud_rate = default_baud_rate
         self.velocity_shift = velocity_shift
         self.angle_shift = angle_shift
@@ -37,7 +42,7 @@ class UARTTransmitter:
 
         return list_com_ports
 
-    def send_data_through_uart(self, angle: int, motor_id: int = 0, velocity: int = 75) -> bool:
+    def send_data_through_uart(self, angle: int, motor_id: int = 0, velocity: int = 75):
         """
         This function takes angle as input to send it to a microcontroller through UART;
 
@@ -47,10 +52,8 @@ class UARTTransmitter:
             velocity (int): The velocity of the motor.
 
         Returns:
-            dataSuccessfullySent (bool): Result of data transmission (Successful or Unsuccessful).
+            str: Hexadecimal representation of the data sent if successful, or an error message if transmission failed.
         """
-        data_successfully_sent = False
-
         angle =  int((2.15 * int(angle) + 360) % 360)
         if angle < 0 or angle > 360:
             raise Exception("Error: The angle must be between 0 and 360 degrees.")
@@ -84,13 +87,15 @@ class UARTTransmitter:
             print(e)
             print("Unable to open serial communication port. Try selecting a different port.")
 
-        byte_data = data.to_bytes(self.number_of_bytes, byteorder='little')
+        byte_data = data.to_bytes(self.bytes, byteorder='little')
 
         try:
             sleep(self.uart_init_delay)
             ser.write(byte_data)
+            return f"Data sent successfully: 0x{byte_data.hex()}"
         except Exception as e:
             print(e)
-
-        print('Data sent: 0x' + byte_data.hex())
+            return "Error: Data transmission failed."
+        finally:
+            ser.close()
     
