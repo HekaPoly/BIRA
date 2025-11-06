@@ -9,7 +9,6 @@ import cv2
 
 import pyzed.sl as sl
 
-
 import cv_viewer.tracking_viewer as cv_viewer
 import cv_viewer.labels as lab
 import history as rd
@@ -61,7 +60,6 @@ def detections_to_custom_box(detections, im0):
         obj.is_grounded = False
         output.append(obj)
     return output
-
 
 def torch_thread(weights, img_size, conf_thres=0.2, iou_thres=0.45):
     global image_net, exit_signal, run_signal, detections
