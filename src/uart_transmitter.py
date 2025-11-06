@@ -52,7 +52,7 @@ class UARTTransmitter:
             velocity (int): The velocity of the motor.
 
         Returns:
-            str: Hexadecimal representation of the data sent if successful, or an error message if transmission failed.
+            None.
         """
         angle =  int((2.15 * int(angle) + 360) % 360)
         if angle < 0 or angle > 360:
@@ -92,10 +92,9 @@ class UARTTransmitter:
         try:
             sleep(self.uart_init_delay)
             ser.write(byte_data)
-            return f"Data sent successfully: 0x{byte_data.hex()}"
+            print(f"Data sent successfully: 0x{byte_data.hex()}")
         except Exception as e:
             print(e)
-            return "Error: Data transmission failed."
         finally:
             ser.close()
     
