@@ -7,10 +7,13 @@ class Micro:
         """
         Initialize the Micro object.
 
-        Args:
+        Parameters:
             frequency (int): Sampling rate in Hz (default: 44100).
             max_duration (int): Maximum duration of recording in seconds.
             device (str or None): Name or ID of the audio input device.
+
+        Returns:
+            None.
         """
         self.frequency = frequency
         self.max_duration = max_duration
@@ -23,6 +26,12 @@ class Micro:
         """
         Start recording audio from the selected device.
         Does nothing if a recording is already in progress.
+
+        Parameters:
+            None.
+
+        Returns:
+            None.
         """
         if self.is_recording:
             print("Recording is already in progress")
@@ -46,11 +55,14 @@ class Micro:
         """
         Internal callback function used by sounddevice to collect audio data.
 
-        Args:
+        Parameters:
             data (numpy.ndarray): Audio buffer received from the device.
             frames (int): Number of frames in the buffer.
             time (CData): Timing information from sounddevice.
             status (CallbackFlags): Stream status (e.g., underflow/overflow).
+
+        Returns:
+            None.
         """
         if status:
             print(f"Status: {status}")
@@ -60,6 +72,12 @@ class Micro:
         """
         Stop the current recording and finalize the audio data.
         Does nothing if no recording is active.
+
+        Parameters:
+            None.
+
+        Returns:
+            None.
         """
         if not self.is_recording:
             print("No recording in progress")
@@ -79,7 +97,7 @@ class Micro:
         """
         Record audio automatically for a given duration.
 
-        Args:
+        Parameters:
             duration (int): Duration of the recording in seconds (default: 5).
         """
         print(f"Recording for {duration} seconds")
@@ -91,8 +109,11 @@ class Micro:
         """
         Save the recorded audio as a WAV file.
 
-        Args:
+        Parameters:
             filename (str): Output file name (default: "recording.wav").
+
+        Returns:
+            None.
         """
         if self.audio_data is None:
             print("No recording to save")
@@ -109,6 +130,9 @@ class Micro:
         """
         Calculate the duration of the current recording.
 
+        Parameters:
+            None.
+
         Returns:
             float: Duration of the recording in seconds.
         """
@@ -119,6 +143,9 @@ class Micro:
     def volume(self):
         """
         Compute the average volume of the recording using RMS (Root Mean Square).
+
+        Parameters:
+            None.
 
         Returns:
             float: Average volume level (0.0 to 1.0).
