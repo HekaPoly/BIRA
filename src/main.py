@@ -11,7 +11,7 @@ import argparse
 import torch
 import math
 import faulthandler
-import uart_transmitter
+import uart
 from enum import Enum
 
 faulthandler.enable()
@@ -42,7 +42,7 @@ def run_test_motors():
                     c = input("Enter velocity %: ")
                 else:
                     c = 80
-                uart_transmitter.send_data_through_UART(int(a), int(b), int(c))
+                uart.send_data_through_UART(int(a), int(b), int(c))
                 print("Data sent successfully.\n")
             except ValueError:
                 print("Invalid input. Please enter numeric values.\n\n")           
