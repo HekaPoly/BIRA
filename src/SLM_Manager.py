@@ -155,18 +155,21 @@ class SLM_Manager:
 #  Exécution directe du script
 # --------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Analyse de commandes NL -> labels connus (labelDict)")
-    parser.add_argument("command", type=str, nargs="*", help="Commande en langage naturel")
-    parser.add_argument("--model", dest="model", default="llama3.2")
-    args = parser.parse_args()
+    while True:
+        parser = argparse.ArgumentParser(description="Analyse de commandes NL -> labels connus (labelDict)")
+        parser.add_argument("command", type=str, nargs="*", help="Commande en langage naturel")
+        parser.add_argument("--model", dest="model", default="llama3.2")
+        args = parser.parse_args()
 
-    cmd = " ".join(args.command).strip()
-    mgr = SLM_Manager(model_name=args.model)
-    mgr.load_model()
+        #cmd = " ".join(args.command).strip()
+        print("Ajouter votre commande: ")
+        cmd = input()
+        mgr = SLM_Manager(model_name=args.model)
+        mgr.load_model()
 
-    if not cmd:
-        print('Exemple : python SLM_Manager.py "BIRA, donne moi la pomme bleu"')
-    else:
-        extraction = mgr.analyze_command(cmd)
-        print(json.dumps(extraction.to_payload(), ensure_ascii=False))
-        print(f"status={extraction.status} confidence={extraction.confidence}")
+        if not cmd:
+            print('Exemple : python SLM_Manager.py "BIRA, donne moi la pomme bleu"')
+        else:
+            extraction = mgr.analyze_command(cmd)
+            print(json.dumps(extraction.to_payload(), ensure_ascii=False))
+            print(f"status={extraction.status} confidence={extraction.confidence}")

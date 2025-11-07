@@ -85,10 +85,44 @@ class Formater:
             Dictionnaire contenant les champs normalisés : response, target_object,
             obstacles, status et confidence.
         """
+
+        REFORMULATION_MSG = (
+            "Je ne suis pas sûr de bien comprendre (confiance ≈{pct}%). "
+            "Peux-tu reformuler en précisant l’objet cible (nom + couleur), "
+            "sa position (ex.: « devant l’ordinateur, derrière toi ») et, s’il y en a, "
+            "les obstacles à éviter ?"
+        )
+
+        THRESHOLD = 0.80
+
+        response = (raw.get("response") or "").strip()
+        target_object = raw.get("target_object", None)
+        obstacles = raw.get("obstacles") or []
+        status = (raw.get("status") or "ok").strip()
+        confidence = float(raw.get("confidence", 0.5))
+        confidence = max(0.0, min(1.0, confidence))
+
+        # Forcer obstacles à être une liste de strings propres
+        if not isinstance(obstacles, list):
+            obstacles = []
+        obstacles = [str(o).strip() for o in obstacles if str(o).strip()]
+
+        # 2) Appliquer la règle de reformulation
+        if (confidence < THRESHOLD) or (status in {"missing_target", "ambiguous", "empty"}):
+            # Si le modèle disait "ok" mais confiance faible, on bascule en "ambiguous"
+            if status == "ok":
+                status = "ambiguous"
+            pct = int(round(confidence * 100))
+            response = REFORMULATION_MSG.format(pct=pct)
+
+        # 3) Valeur par défaut pour response si vide et status ok (rare)
+        if not response and status == "ok":
+            response = "D’accord."
+
         return {
-            "response": raw.get("response", "D'accord."),
-            "target_object": raw.get("target_object"),
-            "obstacles": raw.get("obstacles", []),
-            "status": raw.get("status", "ok"),
-            "confidence": float(raw.get("confidence", 0.5)),
+            "response": response,
+            "target_object": target_object,
+            "obstacles": obstacles,
+            "status": status,
+            "confidence": confidence,
         }
