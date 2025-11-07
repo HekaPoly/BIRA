@@ -1,0 +1,2 @@
+{"id": "test1", "prompt": "Say hello in French.", "type": "contains_any", "must_include_any": ["Bonjour", "Salut"]}
+{"id": "test2", "prompt": "What is 2 + 2?", "type": "exact", "expected": "4"}

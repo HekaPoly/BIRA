@@ -28,7 +28,7 @@ Champs extraits :
 ------------------------------------------------------------------------------------
 NOTES
 ------------------------------------------------------------------------------------
-- Le `Formatter` gère la construction du prompt, le parsing JSON et la
+- Le `Formater` gère la construction du prompt, le parsing JSON et la
   normalisation des résultats.
 - Le `SLM_Manager` se charge de la communication avec Ollama et de
   l’orchestration complète du flux d’analyse.
@@ -36,125 +36,12 @@ NOTES
   et de commande (ex. : bras robotisé ou agent conversationnel).
 """
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Dict, Any, Optional, List
-from Formater.py import build_prompt, parse, postprocess
+from typing import Optional
+from Formater import Formater
+from Extraction import Extraction
 import json
 import argparse
 import requests
-
-# --------------------------------------------------------------------------------------
-#  Classe Formatter
-# --------------------------------------------------------------------------------------
-class Formatter:
-    """
-    Le `Formatter` sert à préparer le prompt envoyé au modèle, à extraire la
-    première structure JSON renvoyée, puis à normaliser les données pour produire
-    un dictionnaire cohérent avec les clés attendues par la classe `Extraction`.
-
-    Étapes :
-      1) build_prompt(user_cmd) : formate une consigne claire pour le SLM.
-      2) parse(raw_text) : isole le premier bloc JSON de la sortie texte brute.
-      3) postprocess(raw, user_cmd) : normalise et complète les champs manquants.
-    """
-
-    def build_prompt(self, user_cmd: str) -> str:
-        """
-        Construit un prompt explicite demandant au modèle d’extraire uniquement un JSON.
-
-        Parameters
-        ----------
-        user_cmd : str
-            Commande ou phrase en langage naturel saisie par l’utilisateur.
-
-        Returns
-        -------
-        str
-            Prompt à envoyer au modèle Ollama.
-        """
-        return (
-            "Tu es un extracteur d'informations. "
-            "Retourne UNIQUEMENT un JSON compact avec les clés suivantes : "
-            "response (str), target_object (str ou null), obstacles (liste de str), "
-            "status (ok/missing_target/ambiguous/empty), confidence (0..1). "
-            f"Texte : {user_cmd}\nJSON :"
-        )
-
-    def parse(self, raw_text: str) -> Dict[str, Any]:
-        """
-        Extrait le premier objet JSON valide contenu dans la sortie du modèle.
-
-        Parameters
-        ----------
-        raw_text : str
-            Texte brut renvoyé par le modèle.
-
-        Returns
-        -------
-        dict
-            Dictionnaire Python décodé à partir du JSON extrait.
-        """
-        start = raw_text.find("{")
-        end = raw_text.rfind("}")
-        if start == -1 or end == -1 or end <= start:
-            raise ValueError("Aucun JSON détecté dans la sortie du modèle.")
-        return json.loads(raw_text[start:end + 1])
-
-    def postprocess(self, raw: Dict[str, Any], user_cmd: str) -> Dict[str, Any]:
-        """
-        Normalise les champs du dictionnaire brut pour assurer la cohérence du schéma.
-
-        Returns
-        -------
-        dict
-            Dictionnaire contenant les champs normalisés : response, target_object,
-            obstacles, status et confidence.
-        """
-        return {
-            "response": raw.get("response", "D'accord."),
-            "target_object": raw.get("target_object"),
-            "obstacles": raw.get("obstacles", []),
-            "status": raw.get("status", "ok"),
-            "confidence": float(raw.get("confidence", 0.5)),
-        }
-
-# --------------------------------------------------------------------------------------
-#  Classe Extraction
-# --------------------------------------------------------------------------------------
-@dataclass
-class Extraction:
-    """
-    Représente la sortie structurée d'une analyse de commande.
-
-    Attributs
-    ---------
-    response : str
-        Message vocal ou textuel à retourner à l’utilisateur.
-    target_object : Optional[str]
-        Nom exact de l’objet cible (ou None si non détecté).
-    obstacles : List[str]
-        Liste des obstacles à éviter.
-    status : str
-        Statut global de l’analyse : "ok", "missing_target", "ambiguous", "empty".
-    confidence : float
-        Niveau de confiance entre 0 et 1.
-    """
-
-    response: str
-    target_object: Optional[str]
-    obstacles: List[str]
-    status: str
-    confidence: float = 0.5
-
-    def to_payload(self) -> Dict[str, Any]:
-        """
-        Retourne une version simplifiée du résultat pour un usage en aval (API, robot…)
-        """
-        return {
-            "response": self.response,
-            "target_object": self.target_object,
-            "obstacles": self.obstacles,
-        }
 
 # --------------------------------------------------------------------------------------
 #  Classe SLM_Manager
@@ -179,7 +66,7 @@ class SLM_Manager:
         self,
         model_name: str = "llama3.2",                       # Nom du modèle Ollama local
         api_url: str = "http://localhost:11434/api/generate",
-        formatter: Optional[Formatter] = None,
+        formater: Optional[Formater] = None,
         max_new_tokens: int = 192,
         temperature: float = 0.4,
     ):
@@ -187,8 +74,7 @@ class SLM_Manager:
         self.api_url = api_url
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
-        self.formatter = formatter or Formatter()
-
+        self.formater = formater or Formater()
     # ------------------------------------------------------------------
     def load_model(self):
         """
@@ -222,9 +108,12 @@ class SLM_Manager:
             json={
                 "model": self.model_name,
                 "prompt": prompt,
+                "format": "json",
+                "options": {
+                    "num_predict": self.max_new_tokens,
+                    "temperature": self.temperature,
+                },
                 "stream": False,
-                "num_predict": self.max_new_tokens,
-                "temperature": self.temperature,
             },
             timeout=60,
         )
@@ -247,10 +136,10 @@ class SLM_Manager:
         Extraction
             Résultat structuré de l’analyse.
         """
-        prompt = self.formatter.build_prompt(user_cmd)
+        prompt = self.formater.build_prompt(user_cmd)
         raw_text = self.generate_response(prompt)
         try:
-            raw = self.formatter.parse(raw_text)
+            raw = self.formater.parse(raw_text)
         except Exception:
             raw = {
                 "response": "Peux-tu reformuler en précisant l’objet cible ?",
@@ -259,7 +148,7 @@ class SLM_Manager:
                 "status": "ambiguous",
                 "confidence": 0.3,
             }
-        data = self.formatter.postprocess(raw, user_cmd)
+        data = self.formater.postprocess(raw, user_cmd)
         return Extraction(**data)
 
 # --------------------------------------------------------------------------------------
@@ -276,7 +165,7 @@ if __name__ == "__main__":
     mgr.load_model()
 
     if not cmd:
-        print('Exemple : python slm_manager.py "Attrape la voiture et évite le bus."')
+        print('Exemple : python SLM_Manager.py "BIRA, donne moi la pomme bleu"')
     else:
         extraction = mgr.analyze_command(cmd)
         print(json.dumps(extraction.to_payload(), ensure_ascii=False))
