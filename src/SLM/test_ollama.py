@@ -1,6 +1,19 @@
 from ollama import Client
 import subprocess
-import os
+import ollama
+
+# subprocess.run(["pip", "install", "ollama"], check=True)
+
+# Check if any models are installed
+list_result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
+models = list_result.stdout.splitlines()[1:]
+# Check if BIRA:latest model is available
+bira_available = any("BIRA:latest" in model for model in models)
+print(bira_available)
+
+# if "llama3.2:latest" not in list_result.stdout and "BIRA:latest" not in list_result.stdout:
+#   # No models installed, pull the model
+#   subprocess.run(["ollama", "pull", model_name], check=True)
 
 model_name = "BIRA:latest"
 
