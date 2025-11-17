@@ -41,7 +41,8 @@ from Formater import Formater
 from Extraction import Extraction
 import json
 import argparse
-import requests
+from ollama import Client
+import subprocess
 
 # --------------------------------------------------------------------------------------
 #  Classe SLM_Manager
@@ -64,29 +65,60 @@ class SLM_Manager:
 
     def __init__(
         self,
-        model_name: str = "llama3.2",                       # Nom du modèle Ollama local
-        api_url: str = "http://localhost:11434/api/generate",
+        model_name: str = "llama3.2",                       
         formater: Optional[Formater] = None,
         max_new_tokens: int = 192,
         temperature: float = 0.4,
     ):
         self.model_name = model_name
-        self.api_url = api_url
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.formater = formater or Formater()
+        self.client = Client(host='http://localhost:11434')
     # ------------------------------------------------------------------
     def load_model(self):
         """
-        Vérifie que le serveur Ollama est accessible (aucun téléchargement HF).
+        Vérifie qu’Ollama tourne, puis lance le modèle avec subprocess
+        pour le 'réveiller', puis crée le client Python.
         """
-        r = requests.post(
-            self.api_url,
-            json={"model": self.model_name, "prompt": "ping", "stream": False, "num_predict": 1},
-            timeout=15,
+
+        # 1. Vérifier que Ollama tourne
+        try:
+            subprocess.run(
+                ["ollama", "list"],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+        except Exception as e:
+            raise RuntimeError("Ollama n'est pas lancé. Lance 'ollama serve'.") from e
+
+        # 2. Vérifier que le modèle existe
+        models = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True
+        ).stdout
+
+        if self.model_name not in models:
+            raise RuntimeError(
+                f"Le modèle {self.model_name} n'existe pas dans Ollama.\n"
+                f"Crée-le avec : ollama create {self.model_name} -f Modelfile"
+            )
+
+        # 3. Réveiller le modèle (ta demande !)
+        print(f"Lancement du modèle {self.model_name}...")
+        subprocess.run(
+            ["ollama", "run", self.model_name],
+            capture_output=True,
+            text=True
         )
-        r.raise_for_status()
-        print("Ollama accessible et prêt.")
+        print("Modèle réveillé !")
+
+        # 4. Initialiser le client Python
+        self.client = Client(host="http://localhost:11434")
+
+        print("Client Python prêt.")
 
     # ------------------------------------------------------------------
     def generate_response(self, prompt: str) -> str:
@@ -103,23 +135,16 @@ class SLM_Manager:
         str
             Sortie textuelle complète produite par le modèle.
         """
-        r = requests.post(
-            self.api_url,
-            json={
-                "model": self.model_name,
-                "prompt": prompt,
-                "format": "json",
-                "options": {
-                    "num_predict": self.max_new_tokens,
-                    "temperature": self.temperature,
-                },
-                "stream": False,
-            },
-            timeout=60,
+        response = self.client.generate(
+            model=self.model_name,
+            prompt=prompt,
+            options={
+                "temperature": self.temperature,
+                "num_predict": self.max_new_tokens,
+            }
         )
-        r.raise_for_status()
-        data = r.json()
-        return data.get("response", "")
+        return response.get("response", "")
+
 
     # ------------------------------------------------------------------
     def analyze_command(self, user_cmd: str) -> Extraction:
@@ -155,21 +180,20 @@ class SLM_Manager:
 #  Exécution directe du script
 # --------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    while True:
-        parser = argparse.ArgumentParser(description="Analyse de commandes NL -> labels connus (labelDict)")
-        parser.add_argument("command", type=str, nargs="*", help="Commande en langage naturel")
-        parser.add_argument("--model", dest="model", default="llama3.2")
-        args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="Analyse de commandes NL -> labels connus (labelDict)")
+    parser.add_argument("command", type=str, nargs="*", help="Commande en langage naturel")
+    parser.add_argument("--model", dest="BIRA", default="llama3.2", help="Nom du modèle Ollama à utiliser")
+    args = parser.parse_args()
 
-        #cmd = " ".join(args.command).strip()
-        print("Ajouter votre commande: ")
-        cmd = input()
-        mgr = SLM_Manager(model_name=args.model)
-        mgr.load_model()
+    #cmd = " ".join(args.command).strip()
+    print("Ajouter votre commande: ")
+    cmd = input()
+    mgr = SLM_Manager(model_name=args.BIRA)
+    mgr.load_model()
 
-        if not cmd:
-            print('Exemple : python SLM_Manager.py "BIRA, donne moi la pomme bleu"')
-        else:
-            extraction = mgr.analyze_command(cmd)
-            print(json.dumps(extraction.to_payload(), ensure_ascii=False))
-            print(f"status={extraction.status} confidence={extraction.confidence}")
+    if not cmd:
+        print('Exemple : python SLM_Manager.py "BIRA, donne moi la pomme bleu"')
+    else:
+        extraction = mgr.analyze_command(cmd)
+        print(json.dumps(extraction.to_payload(), ensure_ascii=False))
+        print(f"status={extraction.status} confidence={extraction.confidence}")
