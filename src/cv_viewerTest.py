@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
                     # 2D rendering
                     np.copyto(image_left_ocv, frame)
-                    cv_viewer.render_2D(image_left_ocv, image_scale, myComputerVision.detect(frame), obj_param.enable_tracking, None)
+                    cv_viewer.render_2D(image_left_ocv, image_scale, myComputerVision.detect(frame), obj_param.enable_tracking, -1)
                     global_image = cv2.hconcat([image_left_ocv, image_track_ocv])
                     cv2.imshow("BIRA - Computer Vision", global_image)
 

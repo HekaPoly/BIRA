@@ -14,7 +14,7 @@ from collections import deque
 # ----------------------------------------------------------------------
 
 
-def cvt(pt, scale):
+def scale_coordinates(pt, scale):
     """Scales coordinates of a point.
     Parameters:
         pt (np.array): The coordinates of the point
@@ -44,6 +44,7 @@ def get_image_position(bounding_box_image, img_scale):
 
 def render_2D(left_display, img_scale, objects, is_tracking_on, label):
     """Renders the detected objects on the camera image.
+    If label is -1, all the objects in objects.object_list will be rendered otherwise only the specified object will be rendered
     Parameters:
         left_display (np.array): The image from the left lens
         img_scale (list[int]): The scaling factor
@@ -58,16 +59,15 @@ def render_2D(left_display, img_scale, objects, is_tracking_on, label):
     line_thickness = 2
     for obj in objects.object_list:
         # filtre
-
-        if label is not None and obj.raw_label != label and label != -1: continue
+        if obj.raw_label != label and label != -1: continue
 
         if render_object(obj, is_tracking_on):
             base_color = generate_color_id_u(obj.id)
             # Display image scaled 2D bounding box
-            top_left_corner = cvt(obj.bounding_box_2d[0], img_scale)
-            top_right_corner = cvt(obj.bounding_box_2d[1], img_scale)
-            bottom_right_corner = cvt(obj.bounding_box_2d[2], img_scale)
-            bottom_left_corner = cvt(obj.bounding_box_2d[3], img_scale)
+            top_left_corner = scale_coordinates(obj.bounding_box_2d[0], img_scale)
+            top_right_corner = scale_coordinates(obj.bounding_box_2d[1], img_scale)
+            bottom_right_corner = scale_coordinates(obj.bounding_box_2d[2], img_scale)
+            bottom_left_corner = scale_coordinates(obj.bounding_box_2d[3], img_scale)
 
             # Creation of the 2 horizontal lines
             cv2.line(left_display, (int(top_left_corner[0]), int(top_left_corner[1])),
