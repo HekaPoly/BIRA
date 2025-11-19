@@ -14,15 +14,26 @@ from collections import deque
 # ----------------------------------------------------------------------
 
 
-def cvt(pt, scale):
-    """
-    Function that scales point coordinates
+def scale_coordinates(pt, scale):
+    """Scales coordinates of a point.
+    Parameters:
+        pt (np.array): The coordinates of the point
+        scale (float): The scaling factor
+    Returns:
+        list[int]: Scaled coordinates of the point
     """
     out = [pt[0] * scale[0], pt[1] * scale[1]]
     return out
 
 
 def get_image_position(bounding_box_image, img_scale):
+    """Finds the center position of an object’s 2D bounding box in image coordinates scaled to the image size.
+    Parameters:
+        bounding_box_image (np.array[int][int]): 2D bounding box of the object
+        img_scale (list[int]): The scaling factor
+    Returns:
+        np.array: Center of the box scaled to match the image size
+    """
     out_position = np.zeros(2)
     out_position[0] = (bounding_box_image[0][0] + (bounding_box_image[2][0] - bounding_box_image[0][0]) * 0.5) * \
                       img_scale[0]
@@ -32,21 +43,31 @@ def get_image_position(bounding_box_image, img_scale):
 
 
 def render_2D(left_display, img_scale, objects, is_tracking_on, label):
+    """Renders the detected objects on the camera image.
+    If label is -1, all the objects in objects.object_list will be rendered otherwise only the specified object will be rendered
+    Parameters:
+        left_display (np.array): The image from the left lens
+        img_scale (list[int]): The scaling factor
+        objects (sl.Objects): The object containing the results of the detection.
+        is_tracking_on (bool): Represents if the tracking is activated or not
+        label (int): The integer corresponding to the object
+    Returns:
+        None
+    """
     overlay = left_display.copy()
 
     line_thickness = 2
     for obj in objects.object_list:
         # filtre
-
         if obj.raw_label != label and label != -1: continue
 
         if render_object(obj, is_tracking_on):
             base_color = generate_color_id_u(obj.id)
             # Display image scaled 2D bounding box
-            top_left_corner = cvt(obj.bounding_box_2d[0], img_scale)
-            top_right_corner = cvt(obj.bounding_box_2d[1], img_scale)
-            bottom_right_corner = cvt(obj.bounding_box_2d[2], img_scale)
-            bottom_left_corner = cvt(obj.bounding_box_2d[3], img_scale)
+            top_left_corner = scale_coordinates(obj.bounding_box_2d[0], img_scale)
+            top_right_corner = scale_coordinates(obj.bounding_box_2d[1], img_scale)
+            bottom_right_corner = scale_coordinates(obj.bounding_box_2d[2], img_scale)
+            bottom_left_corner = scale_coordinates(obj.bounding_box_2d[3], img_scale)
 
             # Creation of the 2 horizontal lines
             cv2.line(left_display, (int(top_left_corner[0]), int(top_left_corner[1])),
