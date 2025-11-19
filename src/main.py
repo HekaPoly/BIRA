@@ -4,6 +4,7 @@ import speech_to_text
 import numpy as np
 from text_viewer import TextViewer
 from time import sleep
+from tts import Speaker
 import utils
 import history as history
 import argparse
@@ -119,14 +120,11 @@ def main():
     print(detected_objects)
     print(stt_res)
 
-    #mgr = SLM_Manager(model_name="llama3.2")
-    #mgr.load_model()
-    #ext = mgr.analyze_command(stt_res)
-    #print(ext.to_payload())
-    #print(f"status={ext.status} confidence={ext.confidence}")
+    # Feed the data to llama3.2 model
 
-    
-
+    example_res = "Voici le Text-to-Speech de BIRA."
+    tts = Speaker()
+    tts.speak(example_res)
 
 if __name__ == '__main__':
     main()
