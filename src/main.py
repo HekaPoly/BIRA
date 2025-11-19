@@ -13,6 +13,9 @@ import faulthandler
 import uart_transmitter
 from enum import Enum
 from computer_vision import ComputerVision
+from camera import Camera
+import pyzed.sl as sl
+import cv2
 
 faulthandler.enable()
 
@@ -82,23 +85,48 @@ def main():
     parser.add_argument('--motors', help='Testing motors app')
 
     opt = parser.parse_args()
+    input("Press ENTER to begin recording")
 
-    cv = ComputerVision(opt) 
+    cv = ComputerVision(opt)
+    stt_res = speech_to_text.transcribe_directly()
 
-    if opt.cv is not None:
-        try:
-            duration = float('inf') if opt.cv.lower() == 'inf' else float(opt.cv)
-        except ValueError:
-            raise ValueError(f"Invalid value for --cv: {opt.cv}")
-        with torch.no_grad():
-            coordinated_target_list = cv.object_detection(duration, 39)
-        return
-    elif opt.stt:
-        run_stt()
-    elif opt.motors:
-        run_test_motors()
-    else:
-        run_bira_sequence(opt)
-        
+    cam = Camera()
+    cam.open()
+    detected_objects = []
+
+    try:
+        while True:
+            if cam.grab() == sl.ERROR_CODE.SUCCESS:
+                frame = cam.get_frame()
+                if frame is not None:
+                    objects = cv.detect(frame)
+                    
+                    for obj in objects.object_list:
+                        if len(obj.bounding_box) > 0 and not np.isnan(obj.position).any():
+                            detected_objects.append({
+                                'label_id': int(obj.raw_label),
+                                'confidence': float(obj.confidence),
+                                'position': [float(obj.position[0]), float(obj.position[1]), float(obj.position[2])]
+                            })
+
+            key = cv2.waitKey(1)
+            if key == 27:
+                break
+    finally:
+        cam.close()
+    
+    print(f"\nDetected {len(detected_objects)} objects:")
+    print(detected_objects)
+    print(stt_res)
+
+    #mgr = SLM_Manager(model_name="llama3.2")
+    #mgr.load_model()
+    #ext = mgr.analyze_command(stt_res)
+    #print(ext.to_payload())
+    #print(f"status={ext.status} confidence={ext.confidence}")
+
+    
+
+
 if __name__ == '__main__':
     main()
