@@ -15,7 +15,6 @@ def render_object(object_data, is_tracking_on):
         return (object_data.tracking_state == sl.OBJECT_TRACKING_STATE.OK) or (
                     object_data.tracking_state == sl.OBJECT_TRACKING_STATE.OFF)
 
-
 def generate_color_id_u(idx):
     arr = []
     if idx < 0:
@@ -24,7 +23,6 @@ def generate_color_id_u(idx):
         color_idx = idx % 5
         arr = [id_colors[color_idx][0], id_colors[color_idx][1], id_colors[color_idx][2], 255]
     return arr
-
 
 def draw_vertical_line(left_display, start_pt, end_pt, clr, thickness):
     n_steps = 7
