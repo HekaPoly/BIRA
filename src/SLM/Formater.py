@@ -33,25 +33,19 @@ class Formater:
             Prompt à envoyer au modèle Ollama.
         """
         return (
-            "Tu es un extracteur d'informations. Retourne UNIQUEMENT un JSON compact "
-            'avec les clés: response (str), target_object (str ou null), obstacles (liste de str), '
-            'status ("ok" | "missing_target" | "ambiguous" | "empty"), confidence (0..1). '
-            "Règles STRICTES: "
-            "1) 'response' = courte phrase polie à la 1re personne qui confirme l’action (ex: « Je te donne la pomme bleue. »). "
-            "2) NE JAMAIS répéter la phrase de l’utilisateur ni commencer par « BIRA, ... ». "
-            "3) 'obstacles' = objets à éviter (noms), jamais des couleurs/adjectifs. "
-            "4) JSON valide et auto-contenu, aucun texte autour. "
-            "5) Lis plusieurs exemples ci-dessous mais RÉPONDS UNIQUEMENT pour la ligne marquée TEXTE_CIBLE. "
-            "6) N’emploie pas mot-pour-mot les formulations des exemples.\n"
-            # --- Exemples variés ---
-            'Texte: "Attrape la voiture rouge et évite le bus à gauche"\n'
-            '{"response":"Je prends la voiture rouge.","target_object":"voiture rouge","obstacles":["bus"],"status":"ok","confidence":0.86}\n'
-            'Texte: "Apporte-moi la balle jaune"\n'
-            '{"response":"Je t’apporte la balle jaune.","target_object":"balle jaune","obstacles":[],"status":"ok","confidence":0.85}\n'
-            'Texte: "Donne la pomme bleue devant l’ordinateur"\n'
-            '{"response":"Je te donne la pomme bleue.","target_object":"pomme bleue","obstacles":["ordinateur"],"status":"ok","confidence":0.9}\n'
-            # --- Cible ---
-            f"TEXTE_CIBLE: {user_cmd}\n"
+            "Retourne UNIQUEMENT du JSON.\n"
+            "Règles: target_object=objet à saisir (+couleur), obstacles=objets physiques (PAS directions seules), "
+            'response=confirmation amicale 1ère pers. (❌ pas répéter commande), confidence=0.7-1.0 si clair.\n\n'
+            "Exemples:\n"
+            '"Attrape voiture rouge et évite bus"\n'
+            '{"response":"Avec plaisir, je prends la voiture rouge !","target_object":"voiture rouge","obstacles":["bus"],"status":"ok","confidence":0.85}\n'
+            '"Prends clavier à droite"\n'
+            '{"response":"D\'accord, je saisis le clavier pour toi.","target_object":"clavier","obstacles":[],"status":"ok","confidence":0.7}\n'
+            '"Donne pomme bleue devant ordinateur"\n'
+            '{"response":"Compris, je te donne la pomme bleue !","target_object":"pomme bleue","obstacles":["ordinateur"],"status":"ok","confidence":0.9}\n'
+            '"Prends le truc rouge"\n'
+            '{"response":"Hmm, quel objet rouge veux-tu exactement ?","target_object":null,"obstacles":[],"status":"ambiguous","confidence":0.35}\n\n'
+            f"Commande: {user_cmd}\n"
             "JSON:"
         )
 
@@ -88,12 +82,12 @@ class Formater:
 
         REFORMULATION_MSG = (
             "Je ne suis pas sûr de bien comprendre (confiance ≈{pct}%). "
-            "Peux-tu reformuler en précisant l’objet cible (nom + couleur), "
-            "sa position (ex.: « devant l’ordinateur, derrière toi ») et, s’il y en a, "
+            "Peux-tu reformuler en précisant l'objet cible (nom + couleur), "
+            "sa position (ex.: « devant l'ordinateur, derrière toi ») et, s'il y en a, "
             "les obstacles à éviter ?"
         )
 
-        THRESHOLD = 0.80
+        THRESHOLD = 0.50
 
         response = (raw.get("response") or "").strip()
         target_object = raw.get("target_object", None)

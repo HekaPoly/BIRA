@@ -37,8 +37,8 @@ NOTES
 """
 from __future__ import annotations
 from typing import Optional
-from SLM.Formater import Formater
-from SLM.Extraction import Extraction
+from Formater import Formater
+from Extraction import Extraction
 import json
 import argparse
 from ollama import Client
@@ -65,10 +65,10 @@ class SLM_Manager:
 
     def __init__(
         self,
-        model_name: str = "llama3.2",                       
+        model_name: str = "BIRA",                       
         formater: Optional[Formater] = None,
-        max_new_tokens: int = 192,
-        temperature: float = 0.4,
+        max_new_tokens: int = 128,
+        temperature: float = 0.3,
     ):
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
@@ -165,13 +165,15 @@ class SLM_Manager:
         raw_text = self.generate_response(prompt)
         try:
             raw = self.formater.parse(raw_text)
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ Erreur de parsing JSON: {e}")
+            print(f"Réponse brute du modèle: {raw_text[:200]}...")
             raw = {
-                "response": "Peux-tu reformuler en précisant l’objet cible ?",
+                "response": "Peux-tu reformuler en précisant l'objet cible ?",
                 "target_object": None,
                 "obstacles": [],
                 "status": "ambiguous",
-                "confidence": 0.3,
+                "confidence": 0.4,
             }
         data = self.formater.postprocess(raw, user_cmd)
         return Extraction(**data)
@@ -182,7 +184,7 @@ class SLM_Manager:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyse de commandes NL -> labels connus (labelDict)")
     parser.add_argument("command", type=str, nargs="*", help="Commande en langage naturel")
-    parser.add_argument("--model", dest="BIRA", default="llama3.2", help="Nom du modèle Ollama à utiliser")
+    parser.add_argument("--model", dest="BIRA", default="BIRA", help="Nom du modèle Ollama à utiliser")
     args = parser.parse_args()
 
     #cmd = " ".join(args.command).strip()
