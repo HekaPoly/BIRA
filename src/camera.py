@@ -93,10 +93,23 @@ class Camera:
         None
         """
         self.__image.free()
+        
+    def save(self, filename, view = sl.VIEW.LEFT):
+        """Saves the current image to a file.
+        Parameters:
+            filename (str): The path where the image will be saved
+            view (sl.VIEW): The image you want to save, left lens or right lens, rectified or unrectified and more
+        Returns:
+            bool: True if the image was saved successfully, False otherwise
+        """
+        with Camera.__lock:
+            return self.__zed.retrieve_image(self.__image, view) == sl.ERROR_CODE.SUCCESS and self.__image.write(filename) == sl.ERROR_CODE.SUCCESS
+        
+
     
     def close(self):
         self.__zed.close()
-
+        
     def __del__(self):
         if hasattr(self, "_Camera__zed"):
             self.__zed.close()
@@ -120,16 +133,22 @@ if __name__ == "__main__":
     print("WOww the singleton works bro!" if cam is cam2 else "What the helly...")
     
     with cam:
-        while True:
-            if (cam.grab()):
-                frame = cam.get_frame()
-                if frame is not None:
-                    print("Image retrieved successfully.")
-                    cv2.imshow("Camera Frame left", cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB))
+        if (cam.grab()):
+            frame = cam.get_frame()
+            if frame is not None:
+                print("Image retrieved successfully.")
+                cam.save("camera_test_image.png")
                 
-            key = cv2.waitKey(1)
-            if key == 27:  # Press 'ESC' to exit
-                break
+        # while True:
+        #     if (cam.grab()):
+        #         frame = cam.get_frame()
+        #         if frame is not None:
+        #             print("Image retrieved successfully.")
+        #             cv2.imshow("Camera Frame left", cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB))
+                
+        #     key = cv2.waitKey(1)
+        #     if key == 27:  # Press 'ESC' to exit
+        #         break
     
     if cam.get_frame() is None:
         print("Camera released successfully.")

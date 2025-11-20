@@ -37,8 +37,8 @@ NOTES
 """
 from __future__ import annotations
 from typing import Optional
-from Formater import Formater
-from Extraction import Extraction
+from SLM.Formater import Formater
+from SLM.Extraction import Extraction
 import json
 import argparse
 from ollama import Client

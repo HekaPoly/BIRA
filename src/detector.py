@@ -199,7 +199,11 @@ def object_detection(duration: int, opt, label: int = -1) -> dict:
             # -- Get the image
             lock.acquire()
             zed.retrieve_image(image_left_tmp, sl.VIEW.LEFT)
-            image_net = image_left_tmp.get_data()
+            
+            img = cv2.imread("/home/nvidia/Desktop/BRAs_VoiceAndVision/camera_test_image.png")
+            img_array = np.array(img)
+            image_net = img_array
+            # image_net = image_left_tmp.get_data()
             lock.release()
             run_signal = True
 
@@ -211,9 +215,24 @@ def object_detection(duration: int, opt, label: int = -1) -> dict:
             lock.acquire()
 
             # -- Ingest detections
+            
+            for obj in detections:
+                print("==== Object ====")
+                for attr in dir(obj):
+                    # filtrer les attributs spéciaux (__xxx__)
+                    if not attr.startswith("__"):
+                        try:
+                            value = getattr(obj, attr)
+                        except Exception as e:
+                            value = f"Error reading attribute: {e}"
+                        print(f"{attr}: {value}")
+                    print(attr)
+
+
+            
             zed.ingest_custom_box_objects(detections)
             lock.release()
-
+            
             zed.retrieve_objects(objects, obj_runtime_param)
 
             object_list = objects.object_list
@@ -240,6 +259,8 @@ def object_detection(duration: int, opt, label: int = -1) -> dict:
                     objects_dict[obj_id] = np.array([current_position])
 
             rd.write_history(object_list)
+            
+            
             
             # -- Display
             # Retrieve display data

@@ -1,5 +1,6 @@
 import multiprocessing
 from scipy.stats import trim_mean
+from SLM.SLM_Manager import SLM_Manager
 import speech_to_text
 import numpy as np
 from text_viewer import TextViewer
@@ -8,6 +9,7 @@ from tts import Speaker
 import utils
 import history as history
 import argparse
+import detector
 import torch
 import math
 import faulthandler
@@ -17,63 +19,25 @@ from computer_vision import ComputerVision
 from camera import Camera
 import pyzed.sl as sl
 import cv2
+import json
+from utils import LABELS
 
 faulthandler.enable()
 
-class Mode(Enum):
-    FIX_THRESHOLD = 0
-    TRIMMED = 1
+def find_closest_object(new_position, object_dict, threshold):
+        min_distance = float('inf')
+        closest_obj_id = None
 
-def find_angle(coordinated_target_list:np.ndarray, mode: Mode = Mode.FIX_THRESHOLD) -> int:
-    x = z = 0
-    if mode == Mode.TRIMMED:
-        x = trim_mean(coordinated_target_list[:,0], proportiontocut=0.1)
-        z = trim_mean(coordinated_target_list[:,2], proportiontocut=0.1)
-    elif mode == Mode.FIX_THRESHOLD:
-        x = history.get_distance(coordinated_target_list[:,0])
-        z = history.get_distance(coordinated_target_list[:,2])
-    
-    angle_rad = math.atan(x / z)
-    angle_deg = math.degrees(angle_rad)
-    return angle_deg
-
-def run_test_motors():
-    while True:
-            try:
-                a = input("Enter angle: ")
-                b = input("Enter motor ID: ")
-                if input("Do you want to enter velocity? (y/N): ").strip().lower() == 'y':
-                    c = input("Enter velocity %: ")
-                else:
-                    c = 80
-                uart_transmitter.send_data_through_UART(int(a), int(b), int(c))
-                print("Data sent successfully.\n")
-            except ValueError:
-                print("Invalid input. Please enter numeric values.\n\n")           
-
-def run_stt():
-    def run_text_window(queue: multiprocessing.Queue):
-        app = TextViewer(queue)
-        app.open()
+        for obj_id, positions in object_dict.items():
+            if len(positions) > 0:
+                last_position = positions[-1]
+                distance = np.linalg.norm(new_position - last_position)
+                if distance < min_distance and distance <= threshold:
+                    min_distance = distance
+                    closest_obj_id = obj_id
         
-    text_queue = multiprocessing.Queue()
-    text_process = multiprocessing.Process(target=run_text_window, args=(text_queue,))
-    text_process.start()
+        return closest_obj_id
 
-    text_queue.put("Je suis BIRA, le bras robotique de HEKA.")
-    sleep(3)
-    
-    while True:
-        text_queue.put({"text": "Dis moi quelque chose!", "countdown": 10})
-        text = speech_to_text.transcribe_for(10)
-        text_queue.put({"text": f"Tu as dis: \n{text}", "countdown": 10})
-        sleep(10)
-
-def run_bira_sequence(opt): 
-    text = speech_to_text.transcribe_directly()
-    print(text)
-    label = utils.string_to_label(text)
-    print(label)   
     
 def main():
     parser = argparse.ArgumentParser()
@@ -81,50 +45,87 @@ def main():
     parser.add_argument('--svo', type=str, default=None, help='optional svo file')
     parser.add_argument('--img_size', type=int, default=416, help='inference size (pixels)')
     parser.add_argument('--conf_thres', type=float, default=0.4, help='object confidence threshold')
+    
     parser.add_argument('--cv', type=str, default=None, help='Showcase cv abilities of BIRA for specified duration (use inf for infinity)')
     parser.add_argument('--stt', action="store_true", help='Run speech to text app')
     parser.add_argument('--motors', help='Testing motors app')
 
     opt = parser.parse_args()
-    input("Press ENTER to begin recording")
+    # input("Press ENTER to begin recording")
 
     cv = ComputerVision(opt)
-    stt_res = speech_to_text.transcribe_directly()
+    # stt_res = speech_to_text.transcribe_directly()
+    # print(f"STT Result: {stt_res}")
 
     cam = Camera()
     cam.open()
-    detected_objects = []
+    detected_objects = {}
+    next_object_id = 0
+    MAX_DISTANCE: float = 7.0
+    PROXIMITY_THRESHOLD: float = 0.3
 
     try:
-        while True:
+        for _ in range(3):
             if cam.grab() == sl.ERROR_CODE.SUCCESS:
                 frame = cam.get_frame()
                 if frame is not None:
                     objects = cv.detect(frame)
+                    print(f"Detected {len(objects)} objects")
                     
-                    for obj in objects.object_list:
-                        if len(obj.bounding_box) > 0 and not np.isnan(obj.position).any():
-                            detected_objects.append({
-                                'label_id': int(obj.raw_label),
-                                'confidence': float(obj.confidence),
-                                'position': [float(obj.position[0]), float(obj.position[1]), float(obj.position[2])]
-                            })
+                    
+                    for obj in objects:
+                        print(f"Object {obj.label}, Probability: {obj.probability}, BBox 2D: {obj.bounding_box_2d}\n")
+                        bbox = obj.bounding_box_2d
+                        x_center = int((bbox[0][0] + bbox[1][0] + bbox[2][0] + bbox[3][0]) / 4)
+                        y_center = int((bbox[0][1] + bbox[1][1] + bbox[2][1] + bbox[3][1]) / 4)
+                        current_position = np.array([x_center, y_center])
+                        objects_dict = detected_objects.setdefault(obj.label , {})
+                        
+                        closest_id = find_closest_object(current_position, objects_dict, PROXIMITY_THRESHOLD)
+                        if closest_id is not None:
+                            # Append the position to the existing object's history
+                            objects_dict[closest_id] = np.vstack([objects_dict[closest_id], current_position])
+                        else:
+                            # Create a new object with a unique ID and initialize its history
+                            obj_id = next_object_id
+                            next_object_id += 1
+                            objects_dict[obj_id] = np.array([current_position])
+                            
+                    cv2.imshow("BIRA Camera View", frame)
 
             key = cv2.waitKey(1)
             if key == 27:
                 break
+            else:
+                print("Press ESC to stop detection...", end='\r')
     finally:
         cam.close()
+        cv2.destroyAllWindows()
     
     print(f"\nDetected {len(detected_objects)} objects:")
     print(detected_objects)
-    print(stt_res)
+    # print(detected_objects)
+    # print(stt_res)
 
     # Feed the data to llama3.2 model
+    # cmd = stt_res
+    # mgr = SLM_Manager(model_name='BIRA')
+    # mgr.load_model()
 
-    example_res = "Voici le Text-to-Speech de BIRA."
-    tts = Speaker()
-    tts.speak(example_res)
+    # if not cmd:
+    #     print('Exemple : python SLM_Manager.py "BIRA, donne moi la pomme bleu"')
+
+    # extraction = mgr.analyze_command(cmd)
+    # json_dump = json.dumps(extraction.to_payload(), ensure_ascii=False)
+    # res = json_dump['response']
+    
+    # print(f'JSON Response: {json_dump}')
+    # print(f"status={extraction.status} confidence={extraction.confidence}")
+    
+    res = "Voici les objets que j'ai détectés : " + ", ".join([LABELS[obj.label][1] for obj in detected_objects])
+    print(res)
+    tts = Speaker(voice="Zira")
+    tts.speak(res)
 
 if __name__ == '__main__':
     main()
