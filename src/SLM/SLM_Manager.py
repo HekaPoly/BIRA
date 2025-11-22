@@ -77,10 +77,6 @@ class SLM_Manager:
         self.client = Client(
             # USE LOCAL OLLAMA SERVER
             host='http://localhost:11434'
-            
-            # USE API OLLAMA SERVER
-            # host='https://ollama.com',
-            # headers={'Authorization': 'Bearer ' + OLLAMA_API_KEY}
             )
     # ------------------------------------------------------------------
     def load_model(self):
