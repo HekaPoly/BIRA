@@ -74,7 +74,14 @@ class SLM_Manager:
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.formater = formater or Formater()
-        self.client = Client(host='http://localhost:11434')
+        self.client = Client(
+            # USE LOCAL OLLAMA SERVER
+            host='http://localhost:11434'
+            
+            # USE API OLLAMA SERVER
+            # host='https://ollama.com',
+            # headers={'Authorization': 'Bearer ' + OLLAMA_API_KEY}
+            )
     # ------------------------------------------------------------------
     def load_model(self):
         """
