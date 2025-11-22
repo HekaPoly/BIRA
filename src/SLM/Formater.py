@@ -32,22 +32,22 @@ class Formater:
         str
             Prompt à envoyer au modèle Ollama.
         """
-        return (
-            "Retourne UNIQUEMENT du JSON.\n"
-            "Règles: target_object=objet à saisir (+couleur), obstacles=objets physiques (PAS directions seules), "
-            'response=confirmation amicale 1ère pers. (❌ pas répéter commande), confidence=0.7-1.0 si clair.\n\n'
-            "Exemples:\n"
-            '"Attrape voiture rouge et évite bus"\n'
-            '{"response":"Avec plaisir, je prends la voiture rouge !","target_object":"voiture rouge","obstacles":["bus"],"status":"ok","confidence":0.85}\n'
-            '"Prends clavier à droite"\n'
-            '{"response":"D\'accord, je saisis le clavier pour toi.","target_object":"clavier","obstacles":[],"status":"ok","confidence":0.7}\n'
-            '"Donne pomme bleue devant ordinateur"\n'
-            '{"response":"Compris, je te donne la pomme bleue !","target_object":"pomme bleue","obstacles":["ordinateur"],"status":"ok","confidence":0.9}\n'
-            '"Prends le truc rouge"\n'
-            '{"response":"Hmm, quel objet rouge veux-tu exactement ?","target_object":null,"obstacles":[],"status":"ambiguous","confidence":0.35}\n\n'
-            f"Commande: {user_cmd}\n"
-            "JSON:"
-        )
+        prompt = f"""Retourne UNIQUEMENT du JSON.
+            Règles: target_object=objet à saisir (+couleur), obstacles=objets physiques (PAS directions seules), 
+            response=confirmation amicale 1ère pers. (pas répéter commande), confidence=0.7-1.0 si clair.
+
+            Exemples:
+            "Attrape voiture rouge et évite bus"
+            {{"response":"Avec plaisir, je prends la voiture rouge !","target_object":"voiture rouge","obstacles":["bus"],"status":"ok","confidence":0.85}}
+            "Prends clavier à droite"
+            {{"response":"D'accord, je saisis le clavier pour toi.","target_object":"clavier","obstacles":[],"status":"ok","confidence":0.7}}
+            "Donne pomme bleue devant ordinateur"
+            {{"response":"Compris, je te donne la pomme bleue !","target_object":"pomme bleue","obstacles":["ordinateur"],"status":"ok","confidence":0.9}}
+            "Prends le truc rouge"
+            {{"response":"Hmm, quel objet rouge veux-tu exactement ?","target_object":null,"obstacles":[],"status":"ambiguous","confidence":0.35}}
+
+            Commande: {user_cmd}
+            JSON:"""
 
     def parse(self, raw_text: str) -> Dict[str, Any]:
         """

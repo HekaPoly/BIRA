@@ -2,7 +2,7 @@ import os
 from ollama import Client
 from ollama import ChatResponse
 
-OLLAMA_API_KEY = ''
+OLLAMA_API_KEY = '747aadbe08f24aa5b2898948925dd80a.0hw2fdvQjib4R9VNLbxZVzHw'
 
 client = Client(
     host='https://ollama.com',

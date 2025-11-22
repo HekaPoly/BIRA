@@ -41,9 +41,9 @@ from SLM.Formater import Formater
 from SLM.Extraction import Extraction
 import json
 import argparse
+from SLM.api_constant import SYSTEM_BIRA
 from ollama import Client
 import subprocess
-
 # --------------------------------------------------------------------------------------
 #  Classe SLM_Manager
 # --------------------------------------------------------------------------------------
@@ -69,23 +69,55 @@ class SLM_Manager:
         formater: Optional[Formater] = None,
         max_new_tokens: int = 128,
         temperature: float = 0.3,
+        mode: str = "local",
+        api_key: str = None,
     ):
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.formater = formater or Formater()
-        self.client = Client(
-            # USE LOCAL OLLAMA SERVER
-            host='http://localhost:11434'
+        self.mode = mode
+        
+        if mode == "cloud":
+            if api_key is None:
+                raise ValueError("API key must be provided for cloud mode.")
+            
+            self.client = Client(
+                host="https://ollama.com",
+                headers={'Authorization': f'Bearer {api_key}'}
             )
+            
+        else:
+            self.client = Client(host="http://localhost:11434")
+
     # ------------------------------------------------------------------
     def load_model(self):
         """
         Vérifie qu’Ollama tourne, puis lance le modèle avec subprocess
         pour le 'réveiller', puis crée le client Python.
         """
+        
+        if self.mode == "cloud":
+            print(f"Vérification du modèle '{self.model_name}' via Ollama Cloud...")
+            try:
+                _ = self.client.generate(
+                    model=self.model_name,
+                    prompt="ping",
+                    options={"num_predict": 5}
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    "Impossible de contacter Ollama Cloud. "
+                    "Vérifie ta clé API et le nom du modèle."
+                ) from e
+
+            print("Modèle accessible via l'API Cloud.")
+            print("Client Python prêt.")
+            return
+        
 
         # 1. Vérifier que Ollama tourne
+        print("Vérification du serveur Ollama local...")
         try:
             subprocess.run(
                 ["ollama", "list"],
@@ -119,7 +151,14 @@ class SLM_Manager:
         print("Modèle réveillé !")
 
         # 4. Initialiser le client Python
-        self.client = Client(host="http://localhost:11434")
+        self.client = Client(
+            # USE LOCAL OLLAMA SERVER
+            # host='http://localhost:11434'
+            
+            # USE API OLLAMA SERVER
+            host='https://ollama.com',
+            headers={'Authorization': 'Bearer ' + '747aadbe08f24aa5b2898948925dd80a.0hw2fdvQjib4R9VNLbxZVzHw'}
+            )
 
         print("Client Python prêt.")
 
@@ -138,15 +177,30 @@ class SLM_Manager:
         str
             Sortie textuelle complète produite par le modèle.
         """
-        response = self.client.generate(
+        # response = self.client.generate(
+        #     model=self.model_name,
+        #     prompt=prompt,
+        #     options={
+        #         "temperature": self.temperature,
+        #         "num_predict": self.max_new_tokens,
+        #     }
+        # )
+        # return response.get("response", "")
+        
+        response = self.client.chat(
             model=self.model_name,
-            prompt=prompt,
-            options={
-                "temperature": self.temperature,
-                "num_predict": self.max_new_tokens,
-            }
+            messages=[
+                {"role": "system", "content": SYSTEM_BIRA},
+                {"role": "user", "content": prompt}
+                ],
+                options={
+                    "temperature": self.temperature,
+                    "num_predict": self.max_new_tokens,
+                    "format": "json",
+                }
         )
-        return response.get("response", "")
+        
+        return response["message"]["content"]
 
 
     # ------------------------------------------------------------------
