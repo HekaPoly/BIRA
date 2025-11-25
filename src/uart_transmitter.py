@@ -52,7 +52,7 @@ class UARTTransmitter:
             velocity (int): The velocity of the motor.
 
         Returns:
-            None.
+            None
         """
         angle =  int(angle) % 360
         if angle < 0 or angle > 360:
