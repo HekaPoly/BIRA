@@ -13,7 +13,7 @@ class Micro:
             device (str or None): Name or ID of the audio input device.
 
         Returns:
-            None.
+            None
         """
         self.frequency = frequency
         self.max_duration = max_duration
@@ -28,10 +28,10 @@ class Micro:
         Does nothing if a recording is already in progress.
 
         Parameters:
-            None.
+            None
 
         Returns:
-            None.
+            None
         """
         if self.is_recording:
             print("Recording is already in progress")
@@ -44,14 +44,14 @@ class Micro:
             channels=1,
             dtype="int16",
             device=self.device,
-            callback=self._capture_audio
+            callback=self.capture_audio
         )
 
         self.stream.start()
         self.is_recording = True
         print("Recording started")
 
-    def _capture_audio(self, data, frames, time, status):
+    def capture_audio(self, data, frames, time, status):
         """
         Internal callback function used by sounddevice to collect audio data.
 
@@ -62,7 +62,7 @@ class Micro:
             status (CallbackFlags): Stream status (e.g., underflow/overflow).
 
         Returns:
-            None.
+            None
         """
         if status:
             print(f"Status: {status}")
@@ -74,10 +74,10 @@ class Micro:
         Does nothing if no recording is active.
 
         Parameters:
-            None.
+            None
 
         Returns:
-            None.
+            None
         """
         if not self.is_recording:
             print("No recording in progress")
@@ -113,7 +113,7 @@ class Micro:
             filename (str): Output file name (default: "recording.wav").
 
         Returns:
-            None.
+            None
         """
         if self.audio_data is None:
             print("No recording to save")
@@ -131,7 +131,7 @@ class Micro:
         Calculate the duration of the current recording.
 
         Parameters:
-            None.
+            None
 
         Returns:
             float: Duration of the recording in seconds.
@@ -145,7 +145,7 @@ class Micro:
         Compute the average volume of the recording using RMS (Root Mean Square).
 
         Parameters:
-            None.
+            None
 
         Returns:
             float: Average volume level (0.0 to 1.0).
@@ -160,5 +160,5 @@ if __name__ == "__main__":
     my_micro = Micro(frequency=16000, max_duration=10)
     my_micro.record(duration=3)
     my_micro.save("my_audio.wav")
-    print(f"Duration: {my_micro.duration():.2f} seconds")
-    print(f"Average volume: {my_micro.volume():.3f}")
+    print(f"Duration: {my_micro.duration():.2f} seconds.")
+    print(f"Average volume: {my_micro.volume():.3f}.")
