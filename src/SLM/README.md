@@ -29,7 +29,7 @@ Le projet BIRA intègre des modèles de langage pour permettre une interaction n
 
 ### 🔧 configure_test_ollama.py - Configuration et Tests
 
-Script principal pour configurer et tester l'environnement Ollama. Exécutez ce script avant d'exécuter `run_model_example.py` afin de vous assurer que votre environnement est correctement configuré.
+Script principal pour configurer et tester l'environnement Ollama. **⚠️ IMPORTANT :Exécutez ce script avant d'exécuter `run_model_example.py` afin de vous assurer que votre environnement est correctement configuré.**
 
 **Utilisation :**
 ```bash
@@ -69,19 +69,6 @@ Votre prompt: Peux-tu me passer la banane sur la table ?
 Total Duration: 2.34s
 Load Duration: 0.12s
 ```
-
-## Workflow Recommandé
-
-1. **Premier lancement - Configuration complète :**
-   ```bash
-   cd src
-   python ./SLM/test_ollama.py
-   ```
-
-2. **Utilisation - Chat interactif :**
-   ```bash
-   python ./SLM/run_model_example.py
-   ```
 
 ## Personnalisation du Modèle
 
