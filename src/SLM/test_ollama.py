@@ -1,34 +1,143 @@
 from ollama import Client
 import subprocess
-import ollama
+import os
 
-# subprocess.run(["pip", "install", "ollama"], check=True)
+def check_ollama_installed():
+  try:
+    version_result = subprocess.run(["ollama", "--version"], capture_output=True, text=True, check=True)
+    print(f"✅ Ollama is installed: {version_result.stdout.strip()}")
+  except (subprocess.CalledProcessError, FileNotFoundError):
+    print("⚠️ Ollama is not installed or not found in PATH")
+    try:
+      print("Installing ollama via pip...")
+      subprocess.run(["pip", "install", "ollama"], check=True)
+      print('✅ Ollama installed successfully.')
+    except subprocess.CalledProcessError:
+      print("❌ Failed to install ollama")
+      exit(1)
 
-# Check if any models are installed
-list_result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
-models = list_result.stdout.splitlines()[1:]
-# Check if BIRA:latest model is available
-bira_available = any("BIRA:latest" in model for model in models)
-print(bira_available)
 
-# if "llama3.2:latest" not in list_result.stdout and "BIRA:latest" not in list_result.stdout:
-#   # No models installed, pull the model
-#   subprocess.run(["ollama", "pull", model_name], check=True)
+def pull_source_model_if_needed(target_model_name="BIRA", source_model_name="llama3.2"):
+  list_result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
+  models = list_result.stdout.splitlines()
+  
+  # Check if source model is available
+  if not any(source_model_name in model for model in models):
+    # No models installed, pull the model
+    print(f"⚠️ {source_model_name} not available.")
+    print(f"Pulling model {source_model_name}...")
+    try:
+      subprocess.run(["ollama", "pull", source_model_name], check=True)
+      print(f"✅ Model {source_model_name} pulled successfully.")
+    except subprocess.CalledProcessError:
+      print(f"❌ Failed to pull model {source_model_name}")
+      exit(1)
+  else:
+    print(f"✅ Model {source_model_name} is available.")
+  
+  # Check if target model is available
+  if not any(target_model_name in model for model in models):
+    print(f"⚠️ {target_model_name} not available. It needs to be built from Modelfile.")
+    return True
+  else:
+    print(f"✅ Model {target_model_name} is available. No need to build.")
+    return False
 
-model_name = "BIRA:latest"
 
-# Start ollama run in a separate process and wait for completion
-process = subprocess.run([f"ollama", "run", model_name], capture_output=True, text=True)
+def build_model_from_modelfile(target_model_name="BIRA", source_model_name="llama3.2"):
+  modelfile_path = "./SLM/Modelfile"
+  if os.path.exists(modelfile_path):
+    with open(modelfile_path, 'r') as file:
+      content = file.read()
+      if f"FROM {source_model_name}" in content:
+        print(f"✅ Modelfile contains 'FROM {source_model_name}'")
+        print("🛠️ Creating model from Modelfile...")
+        try:
+          subprocess.run(["ollama", "create", target_model_name, "-f", modelfile_path], check=True)
+          print(f"✅ Model {target_model_name} built successfully from Modelfile.")
+        except subprocess.CalledProcessError as e:
+          print(f"❌ Failed to build model {target_model_name} from Modelfile")
+          print(f"Error details: {e}")
+          exit(1)
+      else:
+        print(f"❌ Modelfile does not contain 'FROM {source_model_name}'. Please update it.")
+        exit(1)
+  else:
+    print("❌ Modelfile not found")
+    exit(1)
 
-client = Client(
-  host='http://localhost:11434',
-  headers={'x-some-header': 'some-value'}
-)
-response = client.chat(model='BIRA', messages=[
-  {
-    'role': 'user',
-    'content': 'Can you please give me the banana behind you?',
-  },
-])
 
-print(response)
+def check_model_source(target_model_name="BIRA", expected_source="llama3.2"):
+    """Check if the model is based on the expected source model"""
+    try:
+        show_result = subprocess.run(["ollama", "show", target_model_name], capture_output=True, text=True, check=True)
+        output = show_result.stdout
+        
+        # Extract version from expected_source (e.g., "llama3.2" -> "3.2")
+        if expected_source.lower().startswith("llama"):
+            expected_version = expected_source.lower().replace("llama", "")
+        else:
+            expected_version = expected_source
+        
+        # Look for architecture and license information
+        architecture_found = False
+        version_found = False
+        
+        for line in output.splitlines():
+            original_line = line.strip()
+            line_lower = line.strip().lower()
+            
+            # Check architecture line - should be exactly "llama"
+            if "architecture" in line_lower and "llama" in line_lower:
+                architecture_found = True
+                print(f"✅ Architecture: {original_line}")
+            
+            # Check license for specific LLAMA version
+            if "llama" in line_lower and "license" in line_lower and expected_version in line_lower:
+                version_found = True
+                print(f"✅ License confirms LLAMA {expected_version}: {original_line}")
+        
+        if architecture_found and version_found:
+            print(f"✅ {target_model_name} is confirmed to be based on LLAMA {expected_version}")
+            return True
+        elif architecture_found:
+            print(f"⚠️ {target_model_name} is based on llama but version doesn't match {expected_version}")
+            # Show what version it actually is
+            for line in output.splitlines():
+                if "llama" in line.lower() and "license" in line.lower():
+                  print(f"   Found: {line.strip()}")
+            return False
+        else:
+            print(f"❌ {target_model_name} is not based on llama architecture")
+            print(f"Model info:\n{output}")
+            return False
+        
+    except subprocess.CalledProcessError:
+        print(f"❌ Model {target_model_name} not found")
+        return False
+    except FileNotFoundError:
+        print("❌ Ollama command not found")
+        return False
+
+
+def main():
+  source_model_name = "llama3.2"
+  target_model_name = "BIRA2"
+  new_model_file = False
+  
+  check_ollama_installed()
+  # add function to build the model from Modelfile if needed
+  # Check if Modelfile exists and contains FROM llama3.2
+  
+  # Check if target model is available
+  if new_model_file or pull_source_model_if_needed(target_model_name, source_model_name):
+    build_model_from_modelfile(target_model_name, source_model_name)
+
+  if check_model_source(target_model_name, source_model_name):
+        print("🦾 Model verification passed!")
+  else:
+      print(" 😭 Model verification failed!")
+      exit(1)
+  
+
+main()
