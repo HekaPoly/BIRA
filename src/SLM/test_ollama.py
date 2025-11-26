@@ -1,6 +1,7 @@
 from ollama import Client
 import subprocess
 import os
+from dotenv import load_dotenv
 
 def check_ollama_installed():
   try:
@@ -119,15 +120,62 @@ def check_model_source(target_model_name="BIRA", expected_source="llama3.2"):
         print("❌ Ollama command not found")
         return False
 
+def test_ollama_run(target_model_name="BIRA"):
+  # Start ollama run in a separate process and wait for completion
+  try:
+    # Check if model is already running
+    ps_result = subprocess.run(["ollama", "ps"], capture_output=True, text=True)
+    running_models = ps_result.stdout.splitlines()
+    
+    # Check if target model is already running
+    if not any(target_model_name in model for model in running_models):
+      print(f"🦿 Starting ollama run for model: {target_model_name}...")
+      subprocess.run([f"ollama", "run", target_model_name], capture_output=True, text=True, check=True)
+      print(f"✅ Successfully started ollama run for model: {target_model_name}")
+    else:
+      print(f"🧐 Model {target_model_name} is already running. Stop it before starting a new instance by running 'ollama stop {target_model_name}'.")
+
+  except subprocess.CalledProcessError as e:
+    print(f"❌ Failed to run model {target_model_name}")
+    print(f"Error details: {e}")
+    return False
+  
+  test_prompts = ["Peux-tu me passer la banane derrière toi, s'il te plaît?", "S'il te plaît?", "Merci!"]
+  
+  client = Client(
+    host='http://localhost:11434',
+    headers={'x-some-header': 'some-value'}
+  )
+
+  for idx, prompt in enumerate(test_prompts):
+    print(f"📝 Sending test prompt #{idx+1} to model: {prompt}")
+    response = client.chat(model=target_model_name, messages=[
+      {
+        'role': 'user',
+        'content': prompt,
+      },
+  ])
+
+    print(f"📝 Response #{idx+1} from model:")
+    print(f"Model: {response.model}")
+    print(f"Content: {response.message.content}")
+    print(f"Role: {response.message.role}")
+    print(f"Total Duration: {response.total_duration / 1e9:.2f}s")
+    print(f"Load Duration: {response.load_duration / 1e9:.2f}s")
+    print(f"Eval Count: {response.eval_count}")
+    print(f"Prompt Eval Count: {response.prompt_eval_count}")
+
 
 def main():
-  source_model_name = "llama3.2"
-  target_model_name = "BIRA2"
-  new_model_file = False
+  load_dotenv()
+
+  source_model_name = os.getenv("SOURCE_MODEL_NAME", "llama3.2")
+  target_model_name = os.getenv("TARGET_MODEL_NAME", "BIRA")
+  new_model_file = os.getenv("NEW_MODEL_FILE", "True").lower() == "true"
+
+  print(source_model_name, target_model_name, new_model_file)
   
   check_ollama_installed()
-  # add function to build the model from Modelfile if needed
-  # Check if Modelfile exists and contains FROM llama3.2
   
   # Check if target model is available
   if new_model_file or pull_source_model_if_needed(target_model_name, source_model_name):
@@ -136,8 +184,9 @@ def main():
   if check_model_source(target_model_name, source_model_name):
         print("🦾 Model verification passed!")
   else:
-      print(" 😭 Model verification failed!")
+      print("😭 Model verification failed!")
       exit(1)
-  
+    
+  test_ollama_run(target_model_name)
 
 main()
