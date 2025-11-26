@@ -62,4 +62,6 @@ Pour activer la détection de profondeur, connectez une caméra ZED et suivez le
   - **record.py** : Implémente la transcription vocale avec OpenAI Whisper.
   - **cv_viewer/** : Contient les outils pour afficher les résultats de détection.
   - **ogl_viewer/** : Contient les outils pour la visualisation 3D avec la caméra ZED.
+  - **SLM/** : Contient les outils pour l'interaction avec les modèles de langage (Small Language Models).
 - **outputs/** : Contient les scripts pour récupérer les données générées.
+  
