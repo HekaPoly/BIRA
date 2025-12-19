@@ -5,7 +5,14 @@ from dotenv import load_dotenv
 
 def check_ollama_installed():
     try:
-        version_result = subprocess.run(["ollama", "--version"], capture_output=True, text=True, check=True)
+        version_result = subprocess.run(
+            ["ollama", "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
         print(f"✅ Ollama is installed: {version_result.stdout.strip()}")
     except (subprocess.CalledProcessError, FileNotFoundError):
         print("⚠️ Ollama is not installed or not found in PATH")
@@ -17,8 +24,14 @@ def check_ollama_installed():
             print("❌ Failed to install ollama")
             exit(1) 
 
-def pull_source_model_if_needed(target_model_name="BIRA", source_model_name="llama3.2"):
-    list_result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
+def pull_source_model_if_needed(target_model_name="BIRA", source_model_name="llama3.2:1b"):
+    list_result = subprocess.run(
+        ["ollama", "list"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     models = list_result.stdout.splitlines()
   
     # Check if source model is available
@@ -44,7 +57,7 @@ def pull_source_model_if_needed(target_model_name="BIRA", source_model_name="lla
         return False
 
 
-def build_model_from_modelfile(target_model_name="BIRA", source_model_name="llama3.2"):
+def build_model_from_modelfile(target_model_name="BIRA", source_model_name="llama3.2:1b"):
     modelfile_path = "./SLM/Modelfile"
     if os.path.exists(modelfile_path):
         with open(modelfile_path, 'r') as file:
@@ -67,10 +80,17 @@ def build_model_from_modelfile(target_model_name="BIRA", source_model_name="llam
         exit(1)
 
 
-def check_model_source(target_model_name="BIRA", expected_source="llama3.2"):
+def check_model_source(target_model_name="BIRA", expected_source="llama3.2:1b"):
     """Check if the model is based on the expected source model"""
     try:
-        show_result = subprocess.run(["ollama", "show", target_model_name], capture_output=True, text=True, check=True)
+        show_result = subprocess.run(
+            ["ollama", "show", target_model_name],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
         output = show_result.stdout
         
         # Extract version from expected_source (e.g., "llama3.2" -> "3.2")
@@ -123,13 +143,26 @@ def test_ollama_run(target_model_name="BIRA", ollama_api_url="http://localhost:1
     # Start ollama run in a separate process and wait for completion
     try:
         # Check if model is already running
-        ps_result = subprocess.run(["ollama", "ps"], capture_output=True, text=True)
+        ps_result = subprocess.run(
+            ["ollama", "ps"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         running_models = ps_result.stdout.splitlines()
     
         # Check if target model is already running
         if not any(target_model_name in model for model in running_models):
             print(f"🦿 Starting ollama run for model: {target_model_name}...")
-            subprocess.run([f"ollama", "run", target_model_name], check=True, capture_output=True, text=True)
+            subprocess.run(
+                [f"ollama", "run", target_model_name],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
             print(f"✅ Successfully started ollama run for model: {target_model_name}")
         else:
             print(f"🧐 Model {target_model_name} is already running. Stop it before starting a new instance by running 'ollama stop {target_model_name}'.")
@@ -164,7 +197,14 @@ def test_ollama_run(target_model_name="BIRA", ollama_api_url="http://localhost:1
 
     try:
         print(f"🛑 Stopping model: {target_model_name}...")
-        subprocess.run(["ollama", "stop", target_model_name], check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["ollama", "stop", target_model_name],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         print(f"✅ Successfully stopped model: {target_model_name}")
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to stop model {target_model_name}. Please stop it manually before starting a new instance by running 'ollama stop {target_model_name}'.")

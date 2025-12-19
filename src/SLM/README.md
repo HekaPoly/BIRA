@@ -4,7 +4,8 @@ Le projet BIRA intègre des modèles de langage pour permettre une interaction n
 
 ## Prérequis SLM
 
-1. **Installer Ollama** : Téléchargez et installez Ollama depuis [https://ollama.ai](https://ollama.ai)
+1. **Installer Ollama** : Téléchargez et installez Ollama depuis [https://ollama.ai](https://ollama.ai) (https://ollama.com/library/llama3.2:latest)
+
 
 ## Configuration
 

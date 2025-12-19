@@ -34,6 +34,7 @@ NOTES
   l’orchestration complète du flux d’analyse.
 - Ce module est conçu pour être intégré à un système plus large de perception
   et de commande (ex. : bras robotisé ou agent conversationnel).
+- python -m SLM.SLM_Manager est utilisé pour ouvrir le slm.
 """
 from __future__ import annotations
 from typing import Optional
@@ -65,7 +66,7 @@ class SLM_Manager:
 
     def __init__(
         self,
-        model_name: str = "llama3.2",                       
+        model_name: str = "BIRA",                       
         formater: Optional[Formater] = None,
         max_new_tokens: int = 192,
         temperature: float = 0.4,
@@ -75,6 +76,13 @@ class SLM_Manager:
         self.temperature = temperature
         self.formater = formater or Formater()
         self.client = Client(host='http://localhost:11434')
+        # Simple state tracking between calls
+        self.previous_state: Optional[Extraction] = None
+        self.current_state: Optional[Extraction] = None
+        # Minimal chat history for free-chat mode (optional)
+        self.chat_history = []
+        # Switch to lock into structured mode once "bira" is invoked
+        self.bira_called_once = False
     # ------------------------------------------------------------------
     def load_model(self):
         """
@@ -88,7 +96,9 @@ class SLM_Manager:
                 ["ollama", "list"],
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
         except Exception as e:
             raise RuntimeError("Ollama n'est pas lancé. Lance 'ollama serve'.") from e
@@ -97,7 +107,9 @@ class SLM_Manager:
         models = subprocess.run(
             ["ollama", "list"],
             capture_output=True,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         ).stdout
 
         if self.model_name not in models:
@@ -111,7 +123,9 @@ class SLM_Manager:
         subprocess.run(
             ["ollama", "run", self.model_name],
             capture_output=True,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         print("Modèle réveillé !")
 
@@ -145,6 +159,25 @@ class SLM_Manager:
         )
         return response.get("response", "")
 
+    # ------------------------------------------------------------------
+    def free_chat(self, user_text: str) -> str:
+        """
+        Mode libre : si l'entrée ne commence pas par 'bira', on répond sans extraction JSON.
+        """
+        self.chat_history.append({"role": "user", "content": user_text})
+        resp = self.client.chat(
+            model=self.model_name,
+            messages=[{"role": "system", "content": "Tu es BIRA, réponds librement au format texte."}] + self.chat_history,
+            options={
+                "temperature": self.temperature,
+                "num_predict": self.max_new_tokens,
+            }
+        )
+        content = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
+        # Conserver l'historique côté assistant
+        self.chat_history.append({"role": "assistant", "content": content})
+        return content
+
 
     # ------------------------------------------------------------------
     def analyze_command(self, user_cmd: str) -> Extraction:
@@ -174,7 +207,23 @@ class SLM_Manager:
                 "confidence": 0.3,
             }
         data = self.formater.postprocess(raw, user_cmd)
-        return Extraction(**data)
+        extraction = Extraction(**data)
+
+        # Update state tracking (previous -> current)
+        self.previous_state = self.current_state
+        self.current_state = extraction
+
+        return extraction
+
+    # ------------------------------------------------------------------
+    def get_states(self) -> dict:
+        """
+        Retourne un snapshot simple de l'état courant et du précédent.
+        """
+        return {
+            "current": self.current_state.to_payload() if self.current_state else None,
+            "previous": self.previous_state.to_payload() if self.previous_state else None,
+        }
 
 # --------------------------------------------------------------------------------------
 #  Exécution directe du script
@@ -182,18 +231,52 @@ class SLM_Manager:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyse de commandes NL -> labels connus (labelDict)")
     parser.add_argument("command", type=str, nargs="*", help="Commande en langage naturel")
-    parser.add_argument("--model", dest="BIRA", default="llama3.2", help="Nom du modèle Ollama à utiliser")
+    parser.add_argument("--model", dest="model", default="BIRA", help="Nom du modèle Ollama à utiliser")
     args = parser.parse_args()
 
-    #cmd = " ".join(args.command).strip()
-    print("Ajouter votre commande: ")
-    cmd = input()
-    mgr = SLM_Manager(model_name=args.BIRA)
+    # Créer et charger le modèle une seule fois
+    mgr = SLM_Manager(model_name=args.model)
     mgr.load_model()
 
-    if not cmd:
-        print('Exemple : python SLM_Manager.py "BIRA, donne moi la pomme bleu"')
-    else:
-        extraction = mgr.analyze_command(cmd)
-        print(json.dumps(extraction.to_payload(), ensure_ascii=False))
-        print(f"status={extraction.status} confidence={extraction.confidence}")
+    small_talk = {"merci", "thanks", "salut", "hello", "allo", "bonjour", "bonsoir", "ca va", "ça va"}
+
+    while True:
+        try:
+            print("Ajouter votre commande (ou 'quit' pour sortir) : ")
+            cmd = input().strip()
+            if not cmd:
+                print('Exemple : BIRA, donne moi la pomme bleue')
+                continue
+            if cmd.lower() in {"quit", "exit"}:
+                break
+
+            cmd_lower = cmd.lower()
+            contains_bira = "bira" in cmd_lower
+
+            # Routing logic:
+            # case 1: petite phrase sociale -> free chat
+            # case 2: aucune mention de Bira encore -> free chat
+            # case 3: Bira invoqué une fois -> reste en extraction
+            # case 4: Bira dans l'état précédent -> reste en extraction
+            if any(tok in cmd_lower for tok in small_talk):
+                answer = mgr.free_chat(cmd)
+                print(answer)
+            elif not mgr.bira_called_once and not contains_bira and not cmd_lower.startswith("chat:"):
+                answer = mgr.free_chat(cmd)
+                print(answer)
+            else:
+                # Mode extraction par défaut
+                if cmd_lower.startswith("chat:"):
+                    chat_msg = cmd[len("chat:"):].strip() or cmd
+                    answer = mgr.free_chat(chat_msg)
+                    print(answer)
+                else:
+                    extraction = mgr.analyze_command(cmd)
+                    print(json.dumps(extraction.to_payload(), ensure_ascii=False))
+                    print(f"status={extraction.status} confidence={extraction.confidence}")
+
+                if contains_bira:
+                    mgr.bira_called_once = True
+        except KeyboardInterrupt:
+            print("\nArrêt demandé. Bye.")
+            break

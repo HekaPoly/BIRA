@@ -7,13 +7,26 @@ from dotenv import load_dotenv
 def run_model(target_model_name="BIRA"):
     try:
         # Check if model is already running
-        ps_result = subprocess.run(["ollama", "ps"], capture_output=True, text=True)
+        ps_result = subprocess.run(
+            ["ollama", "ps"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         running_models = ps_result.stdout.splitlines()
 
         # Check if target model is already running
         if not any(target_model_name in model for model in running_models):
             print(f"🦿 Starting ollama run for model: {target_model_name}...")
-            subprocess.run([f"ollama", "run", target_model_name], check=True, capture_output=True, text=True)
+            subprocess.run(
+                [f"ollama", "run", target_model_name],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
             print(f"✅ Successfully started ollama run for model: {target_model_name}")
         else:
             print(f"🧐 Model {target_model_name} is already running. Stop it before starting a new instance by running 'ollama stop {target_model_name}'.")
@@ -43,7 +56,14 @@ def prompt_model(client, target_model_name, messages):
 def stop_model(target_model_name="BIRA"):
     try:
         print(f"🛑 Stopping model: {target_model_name}...")
-        subprocess.run(["ollama", "stop", target_model_name], check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["ollama", "stop", target_model_name],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         print(f"✅ Successfully stopped model: {target_model_name}")
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to stop model {target_model_name}. Please stop it manually before starting a new instance by running 'ollama stop {target_model_name}'.")
