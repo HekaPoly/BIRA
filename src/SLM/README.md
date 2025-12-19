@@ -11,13 +11,13 @@ Le projet BIRA intègre des modèles de langage pour permettre une interaction n
 
 1. **Créer un fichier .env** dans la racine du projet :
    ```env
-    SOURCE_MODEL_NAME=llama3.2
+    SOURCE_MODEL_NAME=llama3.2:1b
     TARGET_MODEL_NAME=BIRA
     NEW_MODEL_FILE=True
     TEST_RESPONSE_TIME=False
     OLLAMA_API_URL=http://localhost:11434
    ```
-    - `SOURCE_MODEL_NAME` : Modèle de base (défaut: llama3.2)
+    - `SOURCE_MODEL_NAME` : Modèle de base (défaut: llama3.2:1b)
     - `TARGET_MODEL_NAME` : Nom du modèle personnalisé (défaut: BIRA)
     - `NEW_MODEL_FILE` : Forcer la reconstruction du modèle personalisé à partir du Modelfile (défaut: False)
     - `TEST_RESPONSE_TIME` : Activer les tests de performance (défaut: True)
@@ -122,3 +122,5 @@ TARGET_MODEL_NAME=BIRA_V2  # Au lieu de BIRA
 **Problème : Modèle lent**
 - Vérifiez que vous avez suffisamment de RAM
 - Considérez utiliser un modèle plus petit (llama3.1 au lieu de llama3.2)
+
+  
