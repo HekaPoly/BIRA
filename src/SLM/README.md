@@ -1,36 +1,36 @@
 # Modèles de Langage (SLM)
 
-Le projet BIRA intègre des modèles de langage pour permettre une interaction naturelle avec le bras robotique. Cette section utilise **Ollama** pour exécuter des modèles de langage localement.
+Le projet BIRA intègre des modèles de langage pour permettre une interaction naturelle avec le bras robotique. Cette section utilise **Ollama** pour exécuter des modèles localement.
 
 ## Prérequis SLM
 
-1. **Installer Ollama** : Téléchargez et installez Ollama depuis [https://ollama.ai](https://ollama.ai) (https://ollama.com/library/llama3.2:latest)
-
+1. **Installer Ollama** : téléchargez et installez depuis [https://ollama.ai](https://ollama.ai). Vérifiez avec `ollama --version`.
 
 ## Configuration
 
-1. **Créer un fichier .env** dans la racine du projet :
-   ```env
-    SOURCE_MODEL_NAME=llama3.2:1b
-    TARGET_MODEL_NAME=BIRA
-    NEW_MODEL_FILE=True
-    TEST_RESPONSE_TIME=False
-    OLLAMA_API_URL=http://localhost:11434
-   ```
-    - `SOURCE_MODEL_NAME` : Modèle de base (défaut: llama3.2:1b)
-    - `TARGET_MODEL_NAME` : Nom du modèle personnalisé (défaut: BIRA)
-    - `NEW_MODEL_FILE` : Forcer la reconstruction du modèle personalisé à partir du Modelfile (défaut: False)
-    - `TEST_RESPONSE_TIME` : Activer les tests de performance (défaut: True)
-    - `OLLAMA_API_URL` : URL pour l'API d'Ollama (défaut: http://localhost:11434)
+Créez un fichier `.env` à la racine du projet :
 
+```env
+SOURCE_MODEL_NAME=llama3.2:1b
+TARGET_MODEL_NAME=BIRA
+NEW_MODEL_FILE=True
+TEST_RESPONSE_TIME=False
+OLLAMA_API_URL=http://localhost:11434
+```
 
-2. **Modèle BIRA** : Le modèle BIRA est basé sur Llama 3.2 avec un prompt système personnalisé défini dans `src/SLM/Modelfile`
+- `SOURCE_MODEL_NAME` : modèle de base (défaut : llama3.2:1b, ou une variante quantifiée comme `llama3.2:1b-q4_0`).
+- `TARGET_MODEL_NAME` : nom du modèle personnalisé (défaut : BIRA).
+- `NEW_MODEL_FILE` : reconstruire le modèle personnalisé depuis `Modelfile` (défaut : False).
+- `TEST_RESPONSE_TIME` : activer les tests de performance (défaut : True).
+- `OLLAMA_API_URL` : URL de l’API Ollama (défaut : http://localhost:11434).
+
+Le modèle BIRA est basé sur Llama 3.2 avec un prompt système défini dans `src/SLM/Modelfile`.
 
 ## Scripts SLM
 
-### 🔧 configure_test_ollama.py - Configuration et Tests
+### 🔧 configure_test_ollama.py — Configuration et tests
 
-Script principal pour configurer et tester l'environnement Ollama. **⚠️ IMPORTANT :Exécutez ce script avant d'exécuter `run_model_example.py` afin de vous assurer que votre environnement est correctement configuré.**
+Script principal pour configurer et tester l’environnement Ollama. **⚠️ Exécutez-le avant `run_model_example.py` ou `SLM_Manager.py`.**
 
 **Utilisation :**
 ```bash
@@ -39,15 +39,15 @@ python ./SLM/configure_test_ollama.py
 ```
 
 **Fonctionnalités :**
-- ✅ Vérification de l'installation d'Ollama
-- 📥 Téléchargement automatique des modèles source (llama3.2)
-- 🔍 Vérification de la compatibilité des modèles
-- 🛠️ Construction du modèle BIRA à partir du Modelfile
+- ✅ Vérification de l’installation d’Ollama
+- 📥 Téléchargement automatique du modèle source (`SOURCE_MODEL_NAME`)
+- 🔍 Vérification de compatibilité des modèles
+- 🛠️ Construction du modèle `TARGET_MODEL_NAME` à partir du `Modelfile`
 - ⏱️ Tests de performance et temps de réponse
 
-### 💬 run_model_example.py - Interface de Chat
+### 💬 run_model_example.py — Interface de chat
 
-Script interactif pour converser avec le modèle BIRA. Exécuter le script `configure_test_ollama.py` avant afin de vous assurer que votre environnement est correctement configuré.
+Exemple interactif pour converser avec le modèle BIRA. Lancez `configure_test_ollama.py` au préalable.
 
 **Utilisation :**
 ```bash
@@ -56,71 +56,50 @@ python ./SLM/run_model_example.py
 ```
 
 **Fonctionnalités :**
-- 🤖 Démarrage automatique du modèle BIRA
-- 💬 Interface de chat en temps réel sur le terminal
-- 🧠 Conservation de l'historique de conversation
+- 🤖 Démarrage du modèle BIRA
+- 💬 Chat temps réel dans le terminal
+- 🧠 Historique de conversation conservé
 - ⏱️ Affichage des métriques de performance
-- 🛑 Arrêt propre du modèle avec Ctrl+C
+- 🛑 Arrêt propre avec Ctrl+C
 
-**Exemple d'interaction :**
+### 🧭 SLM_Manager.py — Extraction structurée
+
+Gestionnaire qui formate un prompt, envoie la requête au modèle et retourne un objet `Extraction` (response, target_object, obstacles, status, confidence). Supporte un mode “chat:” pour du texte libre.
+
+**Utilisation :**
+```bash
+cd src
+python ./SLM/SLM_Manager.py
 ```
-Votre prompt: Peux-tu me passer la banane sur la table ?
-🤖BIRA: Bien sûr ! Je vais identifier la banane sur la table et utiliser mon bras robotique pour la saisir et vous la passer. Laissez-moi localiser l'objet...
 
-Total Duration: 2.34s
-Load Duration: 0.12s
-```
-
-## Personnalisation du Modèle
-
-**⚠️ IMPORTANT : Après toute modification, définissez `NEW_MODEL_FILE=True` dans votre `.env` et relancez `configure_test_ollama.py` pour que vos changements soient correctement appliqués.**
+## Personnalisation du modèle
 
 ### Modification du Modelfile
-Pour modifier le comportement de BIRA, éditez le fichier `src/SLM/Modelfile` :
-
+Éditez `src/SLM/Modelfile` pour changer le modèle de base ou le prompt système :
 ```
-FROM llama3.2
-PARAMETER temperature 1
+FROM llama3.2:1b
+PARAMETER temperature 0.3
 SYSTEM """
-Ton nom est BIRA, tu est le cerveau d'un bras robotique autonome...
+Tu es BIRA, un bras robotique...
 """
 ```
-**Consultez la documentation d'Ollama sur les Modelfile ([https://docs.ollama.com/modelfile](https://docs.ollama.com/modelfile)) afin de personnaliser le comportement du modèle.**
+Consultez la doc Ollama Modelfile : https://docs.ollama.com/modelfile
 
 ### Modification du .env
 
-**Vous pouvez modifier le modèle utilisé pour bâtir BIRA en changeant la variable `SOURCE_MODEL_NAME` :**
-
+- Changer le modèle source :
 ```env
-SOURCE_MODEL_NAME=llama3.1  # Au lieu de llama3.2
+SOURCE_MODEL_NAME=llama3.2:1b-q4_0
 ```
-Ne pas oublier de changer le modèle source dans `Modelfile` également
-```
-FROM llama3.1 # Au lieu de llama3.2
-...
-```
+N’oubliez pas d’aligner le `FROM` dans `Modelfile`.
 
-- ✅ **Téléchargement automatique** : Le script téléchargera automatiquement le nouveau modèle source (ex: llama3.1)
-- 🔍 **Vérification de compatibilité** : Validation que le TARGET_MODEL est bien basé sur le nouveau SOURCE_MODEL
-- ⚠️ **Reconstruction requise** : Si le TARGET_MODEL existe déjà avec un autre source, il sera reconstruit
-- 📊 **Impact performance** : Modèles différents = performances différentes (taille, vitesse, qualité)
-
-**Modification de `TARGET_MODEL_NAME` :**
+- Changer le modèle cible :
 ```env
-TARGET_MODEL_NAME=BIRA_V2  # Au lieu de BIRA
+TARGET_MODEL_NAME=BIRA_V2
 ```
-- 🆕 **Nouveau modèle personnalisé** : Création d'un modèle avec le nouveau nom
-- 📁 **Coexistence** : L'ancien modèle (BIRA) reste disponible
-- 🔄 **Reconstruction systématique** : Le nouveau modèle sera construit à partir du Modelfile
-- 💬 **Chat indépendant** : Conversations séparées entre les différents modèles
+Reconstruisez avec `NEW_MODEL_FILE=True`.
 
 ## Dépannage
 
-**Problème : "Model BIRA not found"**
-- Solution : Exécutez `python ./SLM/test_ollama.py` pour construire le modèle
-
-**Problème : Modèle lent**
-- Vérifiez que vous avez suffisamment de RAM
-- Considérez utiliser un modèle plus petit (llama3.1 au lieu de llama3.2)
-
-  
+- **“Model BIRA not found”** : exécutez `python ./SLM/configure_test_ollama.py` pour le construire.
+- **Modèle lent / VRAM insuffisante** : utilisez une variante plus petite ou quantifiée (`llama3.2:1b-q4_0`), réduisez `num_predict` côté client. 
