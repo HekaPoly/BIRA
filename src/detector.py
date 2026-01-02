@@ -90,7 +90,7 @@ def find_closest_object(new_position, object_dict, threshold):
         
         Find the ID of the closest existing object of the same label within a threshold distance.
         This function calculates the Euclidean distance between a given position (`new_position`) 
-        and the last known position of each object in `object_dict`. It identifies the closest 
+        and the last known position of each object in `object_dict`. It identifies the cl est 
         object whose distance is less than or equal to the specified `threshold`.
         Parameters:
             new_position (numpy.ndarray): The position of the new object as a NumPy array.

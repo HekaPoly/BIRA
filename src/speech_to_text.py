@@ -1,12 +1,12 @@
-# import whisper
-# import pyaudio
+import whisper
+import pyaudio
 import wave
 import sys
 import tempfile
 from ctypes import *
 
 # Load the Whisper model once
-# model = whisper.load_model("small", device="cuda")
+model = whisper.load_model("small", device="cuda")
 
 # Records audio directly from the microphone until the user presses Enter 
 # and then transcribes it to text using Whisper, returning that transcription.
