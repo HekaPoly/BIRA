@@ -159,6 +159,6 @@ class Micro:
 if __name__ == "__main__":
     my_micro = Micro(frequency=16000, max_duration=10)
     my_micro.record(duration=3)
-    my_micro.save_recording("my_audio.wav")
+    my_micro.save_recording("recording.wav")
     print(f"Duration: {my_micro.get_duration():.2f} seconds")
     print(f"Average volume: {my_micro.get_volume():.3f}")
