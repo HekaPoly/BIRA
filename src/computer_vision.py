@@ -5,7 +5,7 @@ import cv2
 import time
 from camera import Camera
 import argparse
-
+import history as rd
 
 
 class ComputerVision:
@@ -66,6 +66,7 @@ class ComputerVision:
 
             # Creating ingestable objects for the ZED SDK
             obj = sl.CustomBoxObjectData()
+            obj.unique_object_id  = sl.generate_unique_id()
             obj.bounding_box_2d = self.__xywh2abcd(xywh)
             obj.label = det.cls
             obj.probability = det.conf
@@ -88,12 +89,14 @@ class ComputerVision:
         img = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
         detections = self.yolo.predict(img, save=False, imgsz=self.__opt.img_size, conf=self.__opt.conf_thres,
                         iou=iou_thres)[0].cpu().numpy().boxes
-
         self.__detections = self.__detections_to_custom_box(detections)
         
         # -- Ingest detections
         Camera().get_camera().ingest_custom_box_objects(self.__detections)
         Camera().get_camera().retrieve_objects(objects, obj_runtime_param)
+        
+        object_list = objects.object_list
+        rd.write_history(object_list)
         return objects
         
     

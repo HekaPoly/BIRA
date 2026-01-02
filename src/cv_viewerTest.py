@@ -15,10 +15,11 @@ if __name__ == "__main__":
     myCamera = Camera()
     myCamera.open()
 
-    obj_param = sl.ObjectDetectionParameters()
-    obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
-    obj_param.enable_tracking = False
-    myCamera.get_camera().enable_object_detection(obj_param)
+    # Moved to camera.py
+    # obj_param = sl.ObjectDetectionParameters()
+    # obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
+    # obj_param.enable_tracking = False
+    # myCamera.get_camera().enable_object_detection(obj_param)
 
     cameraInfo = myCamera.get_camera().get_camera_information()
     camera_res = cameraInfo.camera_configuration.resolution
@@ -43,7 +44,7 @@ if __name__ == "__main__":
 
                     # 2D rendering
                     np.copyto(image_left_ocv, frame)
-                    cv_viewer.render_2D(image_left_ocv, image_scale, myComputerVision.detect(frame), obj_param.enable_tracking, -1)
+                    cv_viewer.render_2D(image_left_ocv, image_scale, myComputerVision.detect(frame), False, -1)
                     global_image = cv2.hconcat([image_left_ocv, image_track_ocv])
                     cv2.imshow("BIRA - Computer Vision", global_image)
 

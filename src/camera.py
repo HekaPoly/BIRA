@@ -26,7 +26,8 @@ class Camera:
                     self.__camera_pose = sl.Pose()
                     self.__image = sl.Mat()
                     self.isInitialised = True
-            
+                    
+
     
     def get_camera(self):
         return self.__zed
@@ -50,6 +51,11 @@ class Camera:
             if status != sl.ERROR_CODE.SUCCESS:
                 print(repr(status))
                 exit()
+                
+            obj_param = sl.ObjectDetectionParameters()
+            obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
+            obj_param.enable_tracking = False
+            self.__zed.enable_object_detection(obj_param)
     
     def grab(self, runtime_params = sl.RuntimeParameters()):
         """Grabs the latest images from the camera, rectify them, and compute the measurements based on the RuntimeParameters provided.
