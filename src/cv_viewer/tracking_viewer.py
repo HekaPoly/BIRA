@@ -42,15 +42,14 @@ def get_image_position(bounding_box_image, img_scale):
     return out_position
 
 
-def render_2D(left_display, img_scale, objects, is_tracking_on, label):
+def render_2D(left_display, img_scale, objects, is_tracking_on, label = None):
     """Renders the detected objects on the camera image.
-    If label is -1, all the objects in objects.object_list will be rendered otherwise only the specified object will be rendered
     Parameters:
         left_display (np.array): The image from the left lens
         img_scale (list[int]): The scaling factor
         objects (sl.Objects): The object containing the results of the detection.
-        is_tracking_on (bool): Represents if the tracking is activated or not
-        label (int): The integer corresponding to the object
+        is_tracking_on (bool): Represents if the tracking is activated or not.
+        label (optional int): The integer corresponding to the object. If none, all objects are rendered.
     Returns:
         None
     """
@@ -58,8 +57,8 @@ def render_2D(left_display, img_scale, objects, is_tracking_on, label):
 
     line_thickness = 2
     for obj in objects.object_list:
-        # filtre
-        if obj.raw_label != label and label != -1: continue
+        # filter
+        if label != None and obj.raw_label != label: continue
 
         if render_object(obj, is_tracking_on):
             base_color = generate_color_id_u(obj.id)
