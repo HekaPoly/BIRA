@@ -1,96 +1,142 @@
-import numpy as np
-from faster_whisper import WhisperModel
-from micro import Micro
+import whisper # Need to explore forks that may offer better speed or accuracy
+import pyaudio
+import wave
+import sys
+import tempfile
+from ctypes import *
 
+import micro
+
+# Load the Whisper model once
+model = whisper.load_model("small", device="cuda")
+
+# Records audio directly from the microphone until the user presses Enter 
+# and then transcribes it to text using Whisper, returning that transcription.
 class SpeechToText:
-    def __init__(self, local_model="small", device="cuda", language="french"):
-        """
-        Initialize an optimized Whisper model using faster-whisper.
-
-        Parameters:
-            local_model (str): The Whisper model size ("small").
-            device (str): The device to run on ("cuda").
-            language (str): The target transcription language ("french").
-        """
-        try:
-            self.model = WhisperModel(local_model, device=device, compute_type="float16")
-
-        except Exception as e:
-            print(f"Error loading Whisper model: {e}")
-            self.model = None
-
+    def __init__ (self, local_model, extern_API, language):
+        self.local_model = local_model
+        self.extern_API = extern_API
         self.language = language
 
-    def transcribe(self, audio_data: np.ndarray) -> str:
-        """
-        Transcribe raw audio data (NumPy array) into text.
-
-        Parameters:
-            audio_data (np.ndarray): Audio samples, typically recorded from a microphone.
-
-        Returns:
-            str: The transcribed text.
-        """
-        if self.model is None:
-            print("Whisper model is not loaded")
-            return ""
+    # def transcribe_directly():
         
-        if audio_data is None or len(audio_data) == 0:
-            print("No audio data provided")
-            return ""
-        
-        if not isinstance(audio_data, np.ndarray):
-            print("Audio data must be a NumPy array")
-            return ""
-        
-        try:
-            if audio_data.ndim > 1:
-                audio_data = audio_data.mean(axis=1)
+    #     # Create a temporary file to store the recorded audio (this will be deleted once we've finished transcription)
+    #     temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
 
-            if audio_data.dtype == np.int16:
-                audio_data = audio_data.astype(np.float32) / 32768.0
+    #     sample_rate = 16000
+    #     bits_per_sample = 16
+    #     chunk_size = 1024
+    #     audio_format = pyaudio.paInt16
+    #     channels = 1
 
-            print("Transcribing audio")
-            segments, info = self.model.transcribe(audio_data, language=self.language)
+    #     def callback(in_data, frame_count, time_info, status):
+    #         wav_file.writeframes(in_data)
+    #         return None, pyaudio.paContinue
 
-            text = " ".join([segment.text.strip() for segment in segments])
-            print(f"Transcription complete in {info.duration:.1f}s")
-            return text.strip()
-        
-        except Exception as e:
-            print(f"Error during transcription: {e}")
-            return ""
+    #     # Open the wave file for writing
+    #     wav_file = wave.open('recording.wav', 'wb')
+    #     wav_file.setnchannels(channels)
+    #     wav_file.setsampwidth(bits_per_sample // 8)
+    #     wav_file.setframerate(sample_rate)
 
-    def transcribe_from_micro(self, micro) -> str:
-        """
-        Record from an existing Micro object and transcribe the captured audio.
+    #     # Suppress ALSA warnings (https://stackoverflow.com/a/13453192)
+    #     ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+    #     def py_error_handler(filename, line, function, err, fmt):
+    #         return
 
-        Parameters:
-            micro (Micro): An instance of the Micro class that records audio.
+    #     c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+    #     asound = cdll.LoadLibrary('libasound.so')
+    #     asound.snd_lib_error_set_handler(c_error_handler)
 
-        Returns:
-            str: The transcribed text.
-        """
-        try:
-            if not isinstance(micro, Micro):
-                raise ValueError("Provided object is not an instance of Micro")
-            
-            if micro.audio_data is None or len(micro.audio_data) == 0:
-                print("No audio data found")
-                print("Starting recording")
-                micro.record(duration=3)
-                print("Transcribing captured audio")
-            else:
-                return self.transcribe(micro.audio_data)
-            
-        except Exception as e:
-            print(f"Error in transcribe_from_micro: {e}")
-            return ""
+    #     # Initialize PyAudio
+    #     audio = pyaudio.PyAudio()
 
-if __name__ == "__main__":
-    micro = Micro(frequency=16000, max_duration=10)
-    stt = SpeechToText(local_model="small", device="cuda", language="french")
+    #     # Start recording audio
+    #     stream = audio.open(format=audio_format,
+    #                         channels=channels,
+    #                         rate=sample_rate,
+    #                         input=True,
+    #                         frames_per_buffer=chunk_size,
+    #                         stream_callback=callback)
 
-    micro.record(duration=3)
-    transcribed_text = stt.transcribe_from_micro(micro)
-    print("Transcribed text: ", transcribed_text)
+    #     input("Press Enter to stop recording...")
+    #     # Stop and close the audio stream
+    #     stream.stop_stream()
+    #     stream.close()
+    #     audio.terminate()
+
+    #     # Close the wave file
+    #     wav_file.close()
+
+    #     # And transcribe the audio to text (suppressing warnings about running on a CPU)
+    #     result = model.transcribe('recording.wav', language="french")
+
+    #     return str(result["text"].strip())
+
+    # def transcribe_for(seconds = 5):
+    #     import time
+    #     # Create a temporary file to store the recorded audio (this will be deleted once we've finished transcription)
+    #     temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
+
+    #     sample_rate = 16000
+    #     bits_per_sample = 16
+    #     chunk_size = 1024
+    #     audio_format = pyaudio.paInt16
+    #     channels = 1
+
+    #     def callback(in_data, frame_count, time_info, status):
+    #         wav_file.writeframes(in_data)
+    #         return None, pyaudio.paContinue
+
+    #     # Open the wave file for writing
+    #     wav_file = wave.open('recording.wav', 'wb')
+    #     wav_file.setnchannels(channels)
+    #     wav_file.setsampwidth(bits_per_sample // 8)
+    #     wav_file.setframerate(sample_rate)
+
+    #     # Suppress ALSA warnings (https://stackoverflow.com/a/13453192)
+    #     ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+    #     def py_error_handler(filename, line, function, err, fmt):
+    #         return
+
+    #     c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+    #     asound = cdll.LoadLibrary('libasound.so')
+    #     asound.snd_lib_error_set_handler(c_error_handler)
+
+    #     # Initialize PyAudio
+    #     audio = pyaudio.PyAudio()
+
+    #     # Start recording audio
+    #     stream = audio.open(format=audio_format,
+    #                         channels=channels,
+    #                         rate=sample_rate,
+    #                         input=True,
+    #                         frames_per_buffer=chunk_size,
+    #                         stream_callback=callback)
+
+    #     # Stop and close the audio stream
+    #     print(f"Recording for {seconds} seconds...")
+    #     time.sleep(seconds)
+
+    #     stream.stop_stream()
+    #     stream.close()
+    #     audio.terminate()
+
+    #     # Close the wave file
+    #     wav_file.close()
+
+    #     # And transcribe the audio to text (suppressing warnings about running on a CPU)
+    #     result = model.transcribe('recording.wav', language="french")
+
+    #     return str(result["text"].strip())
+
+    def transcribe(self, audio_data):
+        return
+    
+    def transcribe_from_micro(self, micro):
+        return
+
+# À compléter une fois le tout terminé
+# if __name__ == "__main__":
+#     print()
+    
