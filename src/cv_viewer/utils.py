@@ -9,6 +9,13 @@ id_colors = [(232, 176, 59),
              (99, 107, 252)]
 
 def render_object(object_data, is_tracking_on):
+    """Finds if the tracking of object_data is in a valid state.
+    Parameters:
+        object_data (sl.ObjectData): The object containing the data of a detected object such as its bounding_box, label, id and its 3D position.
+        is_tracking_on (bool): Represents if the tracking is activated or not
+    Returns:
+        bool: The validity of the tracking of object_data
+    """
     if is_tracking_on:
         return object_data.tracking_state == sl.OBJECT_TRACKING_STATE.OK
     else:
@@ -16,6 +23,14 @@ def render_object(object_data, is_tracking_on):
                     object_data.tracking_state == sl.OBJECT_TRACKING_STATE.OFF)
 
 def generate_color_id_u(idx):
+    """Generates a color in BGRA format.
+
+    It finds the coresponding color in the id_colors using idx. If idx is < 0 a default color is returned.
+    Parameters:
+        idx (int): The index for the color
+    Returns:
+        list[int]: BGRA format of the color
+    """
     arr = []
     if idx < 0:
         arr = [236, 184, 36, 255]
@@ -25,6 +40,19 @@ def generate_color_id_u(idx):
     return arr
 
 def draw_vertical_line(left_display, start_pt, end_pt, clr, thickness):
+    """Draws short line segments near the start and end of a line between two points.
+
+    The method divides the line between `start_pt` and `end_pt` into `n_steps` equal parts
+    and draws only the first and last segments, leaving the central portion blank.
+    Parameters:
+        left_display (np.array): The image to draw in
+        start_pt (list[int] or tupple): The starting coordinates of the line
+        end_pt (list[int] or tupple): The ending coordinates of the line
+        clr (list[int] or tupple): The color of the line
+        thickness (int): The thickness of the line in pixels
+    Returns:
+        None
+    """
     n_steps = 7
     pt1 = [((n_steps - 1) * start_pt[0] + end_pt[0]) / n_steps
         , ((n_steps - 1) * start_pt[1] + end_pt[1]) / n_steps]
