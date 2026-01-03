@@ -99,4 +99,4 @@ def main():
         run_bira_sequence(opt)
         
 if __name__ == '__main__':
-    main()
+    pass
