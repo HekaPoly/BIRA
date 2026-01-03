@@ -7,7 +7,7 @@ from serial import Serial
 from serial.tools import list_ports
 from time import sleep
 
-class UARTTransmitter:
+class UARTTransmitter(BiraComponent):
     def __init__(self, 
                  default_baud_rate = 115200, 
                  velocity_shift = 3, 

@@ -6,7 +6,7 @@ model = whisper.load_model("small", device="cuda")
 print("Model loaded")
 
 
-class SpeechToText:
+class SpeechToText(BiraComponent):
     def __init__ (self, language):
         self.language = language
 

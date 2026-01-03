@@ -2,7 +2,7 @@ import sounddevice as sd
 import numpy as np
 import wave
 
-class Micro:
+class Micro(BiraComponent):
     def __init__(self, frequency=44100, device=None):
         """
         Initialize the Micro object.
@@ -139,6 +139,27 @@ class Micro:
         normalized = self.audio_data.astype(np.float32) / 32768.0
         rms = np.sqrt(np.mean(normalized ** 2))
         return rms
+    
+    def wait_for_volume(self, threshold=0.02):
+        """
+        Wait until the audio volume exceeds a certain threshold.
+
+        Parameters:
+            threshold (float): Volume threshold to detect a command (default: 0.02).
+
+        Returns:
+            None
+        """
+        self.start_recording()
+        while True:
+            sd.sleep(100)
+            if self.audio_data is not None and len(self.audio_data) > 0:
+                volume = self.get_volume()
+                if volume >= threshold:
+                    print(f"Command detected with volume: {volume:.3f}")
+                    break
+        self.stop_recording()
+        self.mediator.notify(self, "volume_detected")
 
 if __name__ == "__main__":
     my_micro = Micro(frequency=16000)
