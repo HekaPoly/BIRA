@@ -12,6 +12,13 @@ class TextToSpeech:
         
 
     def speak(self, text: str):
+        """
+        Convert the given text to speech and play it.
+        Parameters:
+            text (str): The text to be converted to speech.
+        Returns:
+            None
+        """
         MAX_LEN = 180
 
         for i in range(0, len(text), MAX_LEN):
@@ -24,14 +31,18 @@ class TextToSpeech:
             self.engine.stop()
 
     def stop(self):
+        """
+        Stop the speech engine.
+        Parameters:
+            None
+        Returns:
+            None
+        """
         self.engine.stop()
 
 if __name__== "__main__":
-    print("Testing TTS...", flush=True)
-    text = "Voici les objets que j'ai détectés : person, ordinateur portable, ordinateur portable, clavier, ordinateur portable, ordinateur portable, ordinateur portable, voiture, oiseau, ordinateur portable, ordinateur portable, ordinateur portable, chat, télévision, télévision, télévision, ordinateur portable, person, person, person, person, person, ordinateur portable, télévision, télévision, télévision, person, person, télévision, person, person, télévision, person, person, télévision, télévision, person, ordinateur portable, ordinateur portable, person, télévision, télévision, ordinateur portable, ordinateur portable, ordinateur portable, person, person, ordinateur portable, person, person, person, person, person, person, ordinateur portable, person, ordinateur portable, person, ordinateur portable, person, person, person, person, person, person, person, person, ordinateur portable, ordinateur portable, person, person, person, person, person, person, person, person, person, person, person, person, person, person, person, person, person, person, person, person, person, chaise, chaise, ordinateur portable, valise, valise, ordinateur portable, valise, ordinateur portable, valise, chaise, ordinateur portable, chaise, ordinateur portable, valise, chaise, ordinateur portable, ordinateur portable, person, ordinateur portable, person, chaise, ordinateur portable, chaise, ordinateur portable, ordinateur portable, chien, ordinateur portable, chaise, chaise, télévision, télévision, télévision, chaise, ordinateur portable, chaise, télévision, télévision, ordinateur portable, télévision, chaise, ordinateur portable, télévision, télévision, télévision, télévision, télévision, télévision, télévision, télévision, télévision, chat, télévision, ordinateur portable, chaise, ordinateur portable, ordinateur portable, télévision, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, valise, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, télévision, ordinateur portable, person, ordinateur portable, chaise, ordinateur portable, ordinateur portable, ordinateur portable, ordinateur portable, chaise, ordinateur portable, ordinateur portable, person, ordinateur portable, person, souris, ordinateur portable, person, ordinateur portable, télévision, ordinateur portable, télévision, télévision, télévision, chien, télévision"
-   
     tts = TextToSpeech(voice="fr+f3")
     print("Testing TTS...", flush=True)
 
-    long_text = """Voici les objets que j'ai détectés : person, ordinateur portable, ... etc."""
+    text = """Voici les objets que j'ai détectés : person, ordinateur portable, ... etc."""
     tts.speak(text)
