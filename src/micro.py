@@ -3,20 +3,18 @@ import numpy as np
 import wave
 
 class Micro:
-    def __init__(self, frequency=44100, max_duration=10, device=None):
+    def __init__(self, frequency=44100, device=None):
         """
         Initialize the Micro object.
 
         Parameters:
             frequency (int): Sampling rate in Hz (default: 44100).
-            max_duration (int): Maximum duration of recording in seconds.
             device (str or None): Name or ID of the audio input device.
 
         Returns:
             None
         """
         self.frequency = frequency
-        self.max_duration = max_duration
         self.device = device
         self.is_recording = False
         self.audio_data = None
@@ -125,20 +123,6 @@ class Micro:
             file.setframerate(self.frequency)
             file.writeframes(self.audio_data.tobytes())
         print(f"File saved: {filename}")
-
-    def get_duration(self):
-        """
-        Calculate the duration of the current recording.
-
-        Parameters:
-            None
-
-        Returns:
-            float: Duration of the recording in seconds.
-        """
-        if self.audio_data is None:
-            return 0
-        return len(self.audio_data) / self.frequency
     
     def get_volume(self):
         """
@@ -157,8 +141,7 @@ class Micro:
         return rms
 
 if __name__ == "__main__":
-    my_micro = Micro(frequency=16000, max_duration=10)
+    my_micro = Micro(frequency=16000)
     my_micro.record(duration=3)
     my_micro.save_recording("recording.wav")
-    print(f"Duration: {my_micro.get_duration():.2f} seconds")
     print(f"Average volume: {my_micro.get_volume():.3f}")

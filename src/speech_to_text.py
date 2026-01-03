@@ -1,5 +1,4 @@
 import whisper
-from ctypes import *
 
 # Load the Whisper model once
 print("Loading Whisper model...")
