@@ -1,0 +1,50 @@
+{
+  "model_config": {
+    "model_name": "llama3.2:1b",
+    "architecture": "llama",
+    "model_type": "causal-lm"
+  },
+  "optimization_config": {
+    "precision": "fp16",
+    "max_batch_size": 1,
+    "max_input_length": 256,
+    "max_output_length": 128,
+    "use_fp16": true,
+    "use_int8": false,
+    "use_int4": false,
+    "jetson_optimized": true
+  },
+  "inference_config": {
+    "temperature": 0.4,
+    "top_p": 0.9,
+    "top_k": 50,
+    "repetition_penalty": 1.0,
+    "num_beams": 1
+  },
+  "hardware_config": {
+    "gpu_id": 0,
+    "max_gpu_memory": "6GB",
+    "enable_cuda_graphs": true,
+    "platform": "jetson_orin_nano",
+    "shared_memory_gb": 8
+  },
+  "paths": {
+    "checkpoint_dir": "./tensorrt_models/checkpoints",
+    "engine_dir": "./tensorrt_models/engines",
+    "cache_dir": "./tensorrt_models/cache"
+  },
+  "jetson_specific": {
+    "nvpmodel_mode": 0,
+    "enable_jetson_clocks": true,
+    "max_power_mode": "MAXN",
+    "thermal_throttle_temp": 80,
+    "optimize_for_low_memory": true
+  },
+  "notes": {
+    "precision": "fp16 recommandé pour Jetson Orin Nano (Tensor Cores Ampere)",
+    "max_input_length": "Réduit à 256 pour économiser la RAM sur Jetson (8GB partagée)",
+    "max_output_length": "Réduit à 128 pour optimiser l'utilisation mémoire",
+    "shared_memory": "Jetson Orin Nano utilise 8GB de RAM partagée CPU/GPU",
+    "power_mode": "MAXN = 15W, mode performance maximum"
+  }
+}

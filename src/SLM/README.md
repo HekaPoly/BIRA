@@ -33,12 +33,14 @@ Le modèle BIRA est basé sur Llama 3.2 avec un prompt système défini dans `sr
 Script principal pour configurer et tester l’environnement Ollama. **⚠️ Exécutez-le avant `run_model_example.py` ou `SLM_Manager.py`.**
 
 **Utilisation :**
+
 ```bash
 cd src
 python ./SLM/configure_test_ollama.py
 ```
 
 **Fonctionnalités :**
+
 - ✅ Vérification de l’installation d’Ollama
 - 📥 Téléchargement automatique du modèle source (`SOURCE_MODEL_NAME`)
 - 🔍 Vérification de compatibilité des modèles
@@ -50,12 +52,14 @@ python ./SLM/configure_test_ollama.py
 Exemple interactif pour converser avec le modèle BIRA. Lancez `configure_test_ollama.py` au préalable.
 
 **Utilisation :**
+
 ```bash
 cd src
 python ./SLM/run_model_example.py
 ```
 
 **Fonctionnalités :**
+
 - 🤖 Démarrage du modèle BIRA
 - 💬 Chat temps réel dans le terminal
 - 🧠 Historique de conversation conservé
@@ -67,6 +71,7 @@ python ./SLM/run_model_example.py
 Gestionnaire qui formate un prompt, envoie la requête au modèle et retourne un objet `Extraction` (response, target_object, obstacles, status, confidence). Supporte un mode “chat:” pour du texte libre.
 
 **Utilisation :**
+
 ```bash
 cd src
 python ./SLM/SLM_Manager.py
@@ -75,7 +80,9 @@ python ./SLM/SLM_Manager.py
 ## Personnalisation du modèle
 
 ### Modification du Modelfile
+
 Éditez `src/SLM/Modelfile` pour changer le modèle de base ou le prompt système :
+
 ```
 FROM llama3.2:1b
 PARAMETER temperature 0.3
@@ -83,23 +90,28 @@ SYSTEM """
 Tu es BIRA, un bras robotique...
 """
 ```
+
 Consultez la doc Ollama Modelfile : https://docs.ollama.com/modelfile
 
 ### Modification du .env
 
 - Changer le modèle source :
+
 ```env
 SOURCE_MODEL_NAME=llama3.2:1b-q4_0
 ```
+
 N’oubliez pas d’aligner le `FROM` dans `Modelfile`.
 
 - Changer le modèle cible :
+
 ```env
 TARGET_MODEL_NAME=BIRA_V2
 ```
+
 Reconstruisez avec `NEW_MODEL_FILE=True`.
 
 ## Dépannage
 
 - **“Model BIRA not found”** : exécutez `python ./SLM/configure_test_ollama.py` pour le construire.
-- **Modèle lent / VRAM insuffisante** : utilisez une variante plus petite ou quantifiée (`llama3.2:1b-q4_0`), réduisez `num_predict` côté client. 
+- **Modèle lent / VRAM insuffisante** : utilisez une variante plus petite ou quantifiée (`llama3.2:1b-q4_0`), réduisez `num_predict` côté client.
