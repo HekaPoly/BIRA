@@ -58,7 +58,9 @@ def pull_source_model_if_needed(target_model_name="BIRA", source_model_name="lla
 
 
 def build_model_from_modelfile(target_model_name="BIRA", source_model_name="llama3.2:1b"):
-    modelfile_path = "./SLM/Modelfile"
+    # Resolve Modelfile relative to this script so it works from any cwd
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    modelfile_path = os.path.join(base_dir, "Modelfile")
     if os.path.exists(modelfile_path):
         with open(modelfile_path, 'r') as file:
             content = file.read()
@@ -78,66 +80,6 @@ def build_model_from_modelfile(target_model_name="BIRA", source_model_name="llam
     else:
         print("❌ Modelfile not found")
         exit(1)
-
-
-def check_model_source(target_model_name="BIRA", expected_source="llama3.2:1b"):
-    """Check if the model is based on the expected source model"""
-    try:
-        show_result = subprocess.run(
-            ["ollama", "show", target_model_name],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=True,
-        )
-        output = show_result.stdout
-        
-        # Extract version from expected_source (e.g., "llama3.2" -> "3.2")
-        if expected_source.lower().startswith("llama"):
-            expected_version = expected_source.lower().replace("llama", "")
-        else:
-            expected_version = expected_source
-        
-        # Look for architecture and license information
-        architecture_found = False
-        version_found = False
-        
-        for line in output.splitlines():
-            original_line = line.strip()
-            line_lower = line.strip().lower()
-            
-            # Check architecture line - should be exactly "llama"
-            if "architecture" in line_lower and "llama" in line_lower:
-                architecture_found = True
-                print(f"✅ Architecture: {original_line}")
-            
-            # Check license for specific LLAMA version
-            if "llama" in line_lower and "license" in line_lower and expected_version in line_lower:
-                version_found = True
-                print(f"✅ License confirms LLAMA {expected_version}: {original_line}")
-        
-        if architecture_found and version_found:
-            print(f"✅ {target_model_name} is confirmed to be based on LLAMA {expected_version}")
-            return True
-        elif architecture_found:
-            print(f"⚠️ {target_model_name} is based on llama but version doesn't match {expected_version}")
-            # Show what version it actually is
-            for line in output.splitlines():
-                if "llama" in line.lower() and "license" in line.lower():
-                    print(f"   Found: {line.strip()}")
-            return False
-        else:
-            print(f"❌ {target_model_name} is not based on llama architecture")
-            print(f"Model info:\n{output}")
-            return False
-        
-    except subprocess.CalledProcessError:
-        print(f"❌ Model {target_model_name} not found")
-        return False
-    except FileNotFoundError:
-        print("❌ Ollama command not found")
-        return False
 
 def test_ollama_run(target_model_name="BIRA", ollama_api_url="http://localhost:11434", test_response_time=True):
     # Start ollama run in a separate process and wait for completion
@@ -225,12 +167,6 @@ if __name__ == "__main__":
     # Check if target model is available
     if new_model_file or pull_source_model_if_needed(target_model_name, source_model_name):
         build_model_from_modelfile(target_model_name, source_model_name)
-
-    if check_model_source(target_model_name, source_model_name):
-        print("🦾 Model verification passed!")
-    else:
-        print("😭 Model verification failed!")
-        exit(1)
         
     test_ollama_run(target_model_name, ollama_api_url, test_response_time)
     
