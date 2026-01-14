@@ -28,7 +28,7 @@ class SLM_Manager:
         load_dotenv()
         self.source_model_name = os.getenv("SOURCE_MODEL_NAME", "llama3.2:1b")
         self.target_model_name = os.getenv("TARGET_MODEL_NAME", "BIRA")
-        self.messages = [{'role': 'user', 'content': "What is the temperature in New York?"}]
+        self.messages = []
 
         self._ensure_ollama_ready()
 
@@ -47,8 +47,13 @@ class SLM_Manager:
         """Stop the running target model."""
         stop_model(self.target_model_name)
 
-    def stream_chat(self):
+    def stream_chat(self, new_message: str) -> None:
         """Stream chat responses from the target model."""
+        self.messages.append({
+            'role': 'user',
+            'content': new_message,
+        })
+        
         while True:
             stream = chat(
                 model='BIRA',
@@ -94,4 +99,15 @@ class SLM_Manager:
         print("\n--- Conversation ended ---\n")
         
 manager = SLM_Manager()
-manager.stream_chat()
+
+while True:
+    try:
+        prompt = input("Votre prompt: ")
+        
+        # Get response and add to conversation history
+        manager.stream_chat(prompt)
+        
+    except KeyboardInterrupt:
+        manager.stop_model()
+        print("\nExiting...")
+        break
