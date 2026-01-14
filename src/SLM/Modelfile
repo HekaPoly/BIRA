@@ -1,4 +1,4 @@
-FROM llama3.2:1b
+FROM qwen3:1.7b
 
 # low temperature for concise, stable answers
 PARAMETER temperature 0.3
