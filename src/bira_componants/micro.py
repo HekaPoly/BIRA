@@ -2,6 +2,9 @@ import sounddevice as sd
 import numpy as np
 import wave
 
+from bira_componants.bira_componant import BiraComponent
+
+
 class Micro(BiraComponent):
     def __init__(self, frequency=44100, device=None):
         """

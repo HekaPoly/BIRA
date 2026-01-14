@@ -2,6 +2,8 @@ from threading import Lock
 import pyzed.sl as sl
 import cv2
 
+from bira_componant import BiraComponent
+
 
 
 class Camera(BiraComponent):

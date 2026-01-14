@@ -1,6 +1,9 @@
 import pyttsx3
 import random
 
+from bira_componants.bira_componant import BiraComponent
+
+
 class TextToSpeech(BiraComponent):
     def __init__(self, voice: str = None, rate: int = 130, volume: float = 0.8):
         self.engine = pyttsx3.init()
