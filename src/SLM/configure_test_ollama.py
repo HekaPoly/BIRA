@@ -81,6 +81,22 @@ def build_model_from_modelfile(target_model_name="BIRA", source_model_name="llam
         print("❌ Modelfile not found")
         exit(1)
 
+def stop_model(target_model_name="BIRA"):
+    try:
+        print(f"🛑 Stopping model: {target_model_name}...")
+        subprocess.run(
+            ["ollama", "stop", target_model_name],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        print(f"✅ Successfully stopped model: {target_model_name}")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to stop model {target_model_name}. Please stop it manually before starting a new instance by running 'ollama stop {target_model_name}'.")
+        print(f"Error details: {e}")
+
 def test_ollama_run(target_model_name="BIRA", ollama_api_url="http://localhost:11434", test_response_time=True):
     # Start ollama run in a separate process and wait for completion
     try:
