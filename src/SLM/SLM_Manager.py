@@ -38,12 +38,30 @@ NOTES
 """
 from __future__ import annotations
 from typing import Optional
-from SLM.Formater import Formater
-from SLM.Extraction import Extraction
+from pathlib import Path
+import os
 import json
 import argparse
-from ollama import Client
 import subprocess
+
+from ollama import Client
+
+from SLM.Formater import Formater
+from SLM.Extraction import Extraction
+
+# Chargement optionnel de la configuration (.env) sans imposer la dépendance
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:
+    pass
+
+# Import TensorRT si disponible (sinon fallback Ollama)
+try:
+    from SLM.tensorRT import TensorRTInferenceEngine
+except Exception:
+    TensorRTInferenceEngine = None
 
 # --------------------------------------------------------------------------------------
 #  Classe SLM_Manager
@@ -70,6 +88,9 @@ class SLM_Manager:
         formater: Optional[Formater] = None,
         max_new_tokens: int = 192,
         temperature: float = 0.4,
+        prefer_tensorrt: Optional[bool] = None,
+        tensorrt_engine_dir: Optional[str] = None,
+        tensorrt_fallback_to_ollama: Optional[bool] = None,
     ):
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
@@ -83,12 +104,57 @@ class SLM_Manager:
         self.chat_history = []
         # Switch to lock into structured mode once "bira" is invoked
         self.bira_called_once = False
+        # TensorRT - activable via .env ou paramètres
+        self.prefer_tensorrt = (
+            os.getenv("USE_TENSORRT", "").lower() == "true"
+            if prefer_tensorrt is None
+            else prefer_tensorrt
+        )
+        self.tensorrt_fallback_to_ollama = (
+            os.getenv("TENSORRT_FALLBACK_TO_OLLAMA", "true").lower() == "true"
+            if tensorrt_fallback_to_ollama is None
+            else tensorrt_fallback_to_ollama
+        )
+        default_engine_dir = Path(__file__).resolve().parent / "tensorRT" / "tensorrt_models" / "engines"
+        self.tensorrt_engine_dir = Path(tensorrt_engine_dir or default_engine_dir)
+        self.trt_engine: Optional[TensorRTInferenceEngine] = None
+        self.trt_ready: bool = False
+
+        if self.prefer_tensorrt and TensorRTInferenceEngine is None:
+            print("TensorRTInferenceEngine introuvable, retour à Ollama.")
+            self.prefer_tensorrt = False
+
+        if self.prefer_tensorrt:
+            self._init_tensorrt_engine()
+    # ------------------------------------------------------------------
+    def _init_tensorrt_engine(self) -> None:
+        """
+        Initialise le moteur TensorRT si l'engine est present, sinon bascule sur Ollama.
+        """
+        try:
+            self.trt_engine = TensorRTInferenceEngine(engine_dir=str(self.tensorrt_engine_dir))
+            self.trt_ready = bool(self.trt_engine.load_engine())
+            if self.trt_ready:
+                print(f"TensorRT pret (engine: {self.tensorrt_engine_dir})")
+            elif not self.tensorrt_fallback_to_ollama:
+                raise RuntimeError("Engine TensorRT introuvable")
+        except Exception as exc:
+            self.trt_ready = False
+            msg = f"TensorRT indisponible ({exc}). "
+            if self.tensorrt_fallback_to_ollama:
+                msg += "Fallback Ollama active."
+            print(msg)
+
     # ------------------------------------------------------------------
     def load_model(self):
         """
         Vérifie qu’Ollama tourne, puis lance le modèle avec subprocess
         pour le 'réveiller', puis crée le client Python.
         """
+
+        if self.prefer_tensorrt and self.trt_ready and not self.tensorrt_fallback_to_ollama:
+            print("TensorRT pret, lancement Ollama skip (fallback desactive).")
+            return
 
         # 1. Vérifier que Ollama tourne
         try:
@@ -137,18 +203,34 @@ class SLM_Manager:
     # ------------------------------------------------------------------
     def generate_response(self, prompt: str) -> str:
         """
-        Envoie un prompt au modèle Ollama et récupère la réponse textuelle complète.
+        Envoie un prompt au modele Ollama et recupere la reponse textuelle complete.
 
         Parameters
         ----------
         prompt : str
-            Instruction ou question à traiter.
+            Instruction ou question a traiter.
 
         Returns
         -------
         str
-            Sortie textuelle complète produite par le modèle.
+            Sortie textuelle complete produite par le modele.
         """
+        # TensorRT prioritaire si active et pret
+        if self.prefer_tensorrt and self.trt_ready and self.trt_engine:
+            try:
+                resp = self.trt_engine.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_new_tokens=self.max_new_tokens,
+                    temperature=self.temperature,
+                )
+                content = resp.get("message", {}).get("content", "")
+                if content:
+                    return content
+            except Exception as exc:
+                print(f"TensorRT a echoue ({exc}), fallback Ollama.")
+                if not self.tensorrt_fallback_to_ollama:
+                    raise
+
         response = self.client.generate(
             model=self.model_name,
             prompt=prompt,
@@ -162,22 +244,38 @@ class SLM_Manager:
     # ------------------------------------------------------------------
     def free_chat(self, user_text: str) -> str:
         """
-        Mode libre : si l'entrée ne commence pas par 'bira', on répond sans extraction JSON.
+        Mode libre : si l'entree ne commence pas par 'bira', on repond sans extraction JSON.
         """
         self.chat_history.append({"role": "user", "content": user_text})
-        resp = self.client.chat(
-            model=self.model_name,
-            messages=[{"role": "system", "content": "Tu es BIRA, réponds librement au format texte."}] + self.chat_history,
-            options={
-                "temperature": self.temperature,
-                "num_predict": self.max_new_tokens,
-            }
-        )
+        messages = [{"role": "system", "content": "Tu es BIRA, reponds librement au format texte."}] + self.chat_history
+
+        resp = None
+        if self.prefer_tensorrt and self.trt_ready and self.trt_engine:
+            try:
+                resp = self.trt_engine.chat(
+                    messages=messages,
+                    max_new_tokens=self.max_new_tokens,
+                    temperature=self.temperature,
+                )
+            except Exception as exc:
+                print(f"TensorRT a echoue ({exc}), fallback Ollama.")
+                if not self.tensorrt_fallback_to_ollama:
+                    raise
+
+        if resp is None:
+            resp = self.client.chat(
+                model=self.model_name,
+                messages=messages,
+                options={
+                    "temperature": self.temperature,
+                    "num_predict": self.max_new_tokens,
+                }
+            )
+
         content = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
-        # Conserver l'historique côté assistant
+        # Conserver l'historique cote assistant
         self.chat_history.append({"role": "assistant", "content": content})
         return content
-
 
     # ------------------------------------------------------------------
     def analyze_command(self, user_cmd: str) -> Extraction:
@@ -251,32 +349,29 @@ if __name__ == "__main__":
                 break
 
             cmd_lower = cmd.lower()
-            contains_bira = "bira" in cmd_lower
+            starts_with_bira = cmd_lower.startswith("bira")
+            is_chat_prefix = cmd_lower.startswith("chat:")
 
-            # Routing logic:
-            # case 1: petite phrase sociale -> free chat
-            # case 2: aucune mention de Bira encore -> free chat
-            # case 3: Bira invoqué une fois -> reste en extraction
-            # case 4: Bira dans l'état précédent -> reste en extraction
+            # Routing simplifi?:
+            # - small talk -> chat libre
+            # - "chat:" -> chat libre
+            # - commande qui commence par "bira" -> extraction structur?e
+            # - sinon -> chat libre
             if any(tok in cmd_lower for tok in small_talk):
                 answer = mgr.free_chat(cmd)
                 print(answer)
-            elif not mgr.bira_called_once and not contains_bira and not cmd_lower.startswith("chat:"):
+            elif is_chat_prefix:
+                chat_msg = cmd[len("chat:"):].strip() or cmd
+                answer = mgr.free_chat(chat_msg)
+                print(answer)
+            elif starts_with_bira:
+                extraction = mgr.analyze_command(cmd)
+                print(json.dumps(extraction.to_payload(), ensure_ascii=False))
+                print(f"status={extraction.status} confidence={extraction.confidence}")
+            else:
                 answer = mgr.free_chat(cmd)
                 print(answer)
-            else:
-                # Mode extraction par défaut
-                if cmd_lower.startswith("chat:"):
-                    chat_msg = cmd[len("chat:"):].strip() or cmd
-                    answer = mgr.free_chat(chat_msg)
-                    print(answer)
-                else:
-                    extraction = mgr.analyze_command(cmd)
-                    print(json.dumps(extraction.to_payload(), ensure_ascii=False))
-                    print(f"status={extraction.status} confidence={extraction.confidence}")
 
-                if contains_bira:
-                    mgr.bira_called_once = True
         except KeyboardInterrupt:
             print("\nArrêt demandé. Bye.")
             break
