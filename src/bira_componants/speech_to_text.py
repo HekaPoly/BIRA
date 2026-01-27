@@ -19,7 +19,7 @@ class SpeechToText(BiraComponent):
     async def receive(self, message):
         if message.keys().__contains__('transcribe_1'):
             result = await self.transcribe(message['transcribe_1'])
-            self.mediator.notify(self, {"transcription_ready": result})
+            self.mediator.notify(self, {"transcription_request": result})
 
     async def transcribe_async(self, audio_path):
         return await asyncio.to_thread(
