@@ -99,6 +99,10 @@ class SLM_Manager(BiraComponent):
 
             if response["mode"] == "confirmation":
                 self.mediator.notify(self, {"eating": None})
+                # Execute eating action
+                # Verifier expression 
+                self.mediator.notify(self, {"sleep": None})
+                
             elif response["mode"] == "clarification": 
                 self.mediator.notify(self, {"transcription_request": None})
             elif response["mode"] == "stop":
