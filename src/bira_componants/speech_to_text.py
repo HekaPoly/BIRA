@@ -1,3 +1,4 @@
+import asyncio
 import whisper
 
 from bira_componants.bira_componant import BiraComponent
@@ -9,21 +10,28 @@ print("Model loaded")
 
 
 class SpeechToText(BiraComponent):
-    def __init__ (self, language="french"):
+    def __init__ (self, language="french", mediator=None):
+        super().__init__("speech_to_text", mediator)
         self.language = language
-
-    def transcribe(self, audio_data='recording.wav'):
-        """
-        Transcribe audio data to text using Whisper model.
+        self.model = model
+        self._lock = asyncio.Lock()
         
-        Parameters: 
-            audio_data (str): Path to the audio file to transcribe.
-            
-        Returns:
-            str: Transcribed text.
-        """
-        result = model.transcribe(audio_data, language=self.language)
-        return str(result["text"].strip())
+    async def receive(self, message):
+        if message.keys().__contains__('transcribe_1'):
+            result = await self.transcribe(message['transcribe_1'])
+            self.mediator.notify(self, {"transcription_ready": result})
+
+    async def transcribe_async(self, audio_path):
+        return await asyncio.to_thread(
+            self.model.transcribe,
+            audio_path,
+            language=self.language
+        )
+
+    async def transcribe(self, audio_data='recording.wav'):
+        async with self._lock:
+            result = await self.transcribe_async(audio_data)
+        return result["text"].strip()
     
 if __name__ == "__main__":
     print("Speech to Text module")

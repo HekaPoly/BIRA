@@ -1,3 +1,4 @@
+import asyncio
 import numpy as np
 import pyzed.sl as sl
 from ultralytics import YOLO
@@ -12,7 +13,8 @@ from bira_componants.bira_componant import BiraComponent
 
 class ComputerVision(BiraComponent):
 
-    def __init__(self, opt = None):
+    def __init__(self, opt = None, mediator=None):
+        super().__init__("computer_vision", mediator)
         self.__detections = None
         self.__opt = opt
 
@@ -20,8 +22,14 @@ class ComputerVision(BiraComponent):
         self.yolo = YOLO(opt.weights)
         self.yolo.model.to('cuda')
         self.yolo.model.eval()
+        self._lock = asyncio.Lock()
         print("Network initialized")
-    
+        
+    async def receive(self, message):
+        if message.keys().__contains__('detect_objects_1'):
+            result = await self.detect(message['detect_objects_1'])
+            self.mediator.notify(self, {"detect_objects_ready": result})
+
     def __xywh2abcd(self, xywh):
         """Converts the bounding boxes from xywh format to abcd format
         Parameters:
@@ -77,7 +85,15 @@ class ComputerVision(BiraComponent):
         return output
             
     
-    def detect(self, frame, iou_thres=0.45):
+    async def predict_async(self, audio_path):
+        return await asyncio.to_thread(
+            self.yolo.predict,
+            audio_path,
+            imgsz=self.__opt.img_size,
+            conf=self.__opt.conf_thres
+        )
+    
+    async def detect(self, frame, iou_thres=0.45):
         """Detects the objects present in the frame given.
         Parameters:
             frame (np.array): The image
@@ -89,8 +105,8 @@ class ComputerVision(BiraComponent):
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
 
         img = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
-        detections = self.yolo.predict(img, save=False, imgsz=self.__opt.img_size, conf=self.__opt.conf_thres,
-                        iou=iou_thres)[0].cpu().numpy().boxes
+        detections = await self.predict_async(img)
+        detections = detections[0].cpu().numpy().boxes
         self.__detections = self.__detections_to_custom_box(detections)
         
         # -- Ingest detections

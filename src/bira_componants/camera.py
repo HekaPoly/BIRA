@@ -19,7 +19,8 @@ class Camera(BiraComponent):
 
         return Camera.__instance
     
-    def __init__(self):
+    def __init__(self, mediator=None):
+        super().__init__("camera", mediator)
         if self.isInitialised is False:
             with Camera.__lock:
                 if self.isInitialised is False:
@@ -28,9 +29,17 @@ class Camera(BiraComponent):
                     self.__camera_pose = sl.Pose()
                     self.__image = sl.Mat()
                     self.isInitialised = True
-                    
-
     
+    async def receive(self, message):
+        if message.keys().__contains__('initialize_components'):
+            self.open()
+        elif message.keys().__contains__('close_camera'):
+            self.close()
+        elif message.keys().__contains__('detect_objects_request'):
+            frame = self.get_frame()
+            self.mediator.notify(self, {"detect_objects_1": frame})
+
+
     def get_camera(self):
         return self.__zed
         

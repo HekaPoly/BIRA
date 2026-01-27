@@ -16,7 +16,9 @@ class UARTTransmitter(BiraComponent):
                  velocity_shift = 3, 
                  angle_shift = 16, 
                  bytes = 4, 
-                 uart_init_delay = 2):
+                 uart_init_delay = 2,
+                 mediator=None):
+        super().__init__("uart_transmitter", mediator)
         self.default_baud_rate = default_baud_rate
         self.velocity_shift = velocity_shift
         self.angle_shift = angle_shift

@@ -6,7 +6,7 @@ from bira_componants.bira_componant import BiraComponent
 
 
 class Micro(BiraComponent):
-    def __init__(self, frequency=44100, device=None):
+    def __init__(self, frequency=44100, device=None, mediator=None):
         """
         Initialize the Micro object.
 
@@ -17,11 +17,23 @@ class Micro(BiraComponent):
         Returns:
             None
         """
+        super().__init__("micro", mediator)
         self.frequency = frequency
         self.device = device
         self.is_recording = False
         self.audio_data = None
         self.stream = None
+        
+    async def receive(self, message):
+        if message.keys().__contains__('transcription_request'):
+            self.record(duration=5)
+            self.save_recording('recording.wav')
+            self.mediator.notify(self, "transcribe_1")
+        elif message.keys().__contains__('sleep'):
+            self.wait_for_volume(threshold=0.02)
+            self.mediator.notify(self, "detect_objects_request")
+            self.mediator.notify(self, "transcription_request")
+            
 
     def start_recording(self):
         """

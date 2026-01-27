@@ -17,7 +17,8 @@ class Camera:
 
         return Camera.__instance
     
-    def __init__(self):
+    def __init__(self, mediator=None):
+        super().__init__("Camera", mediator)    
         if self.isInitialised is False:
             with Camera.__lock:
                 if self.isInitialised is False:

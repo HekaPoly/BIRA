@@ -1,3 +1,4 @@
+import asyncio
 import pyttsx3
 import random
 
@@ -5,16 +6,26 @@ from bira_componants.bira_componant import BiraComponent
 
 
 class TextToSpeech(BiraComponent):
-    def __init__(self, voice: str = None, rate: int = 130, volume: float = 0.8):
+    
+    def __init__(self, voice: str = '', rate: int = 130, volume: float = 0.8, mediator=None):
+        super().__init__("text_to_speech", mediator)
         self.engine = pyttsx3.init()
         self.rate = rate
         self.volume = volume
         self.engine.setProperty('rate', self.rate)
         self.engine.setProperty('volume', self.volume)
         self.engine.setProperty('voice', voice)
+        self._lock = asyncio.Lock()
         
+    async def receive(self, message):
+        if message.keys().__contains__('speak_request'):
+            await self.speak(message['speak'])
+            
+    async def speak(self, text: str):
+        async with self._lock:
+            await asyncio.to_thread(self._speak_sync, text)
 
-    def speak(self, text: str):
+    async def _speak_sync(self, text: str):
         """
         Convert the given text to speech and play it.
         Parameters:
@@ -33,7 +44,7 @@ class TextToSpeech(BiraComponent):
             self.engine.runAndWait()
             self.engine.stop()
 
-    def stop(self):
+    async def stop(self):
         """
         Stop the speech engine.
         Parameters:
