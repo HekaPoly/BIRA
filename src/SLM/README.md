@@ -66,10 +66,16 @@ python ./SLM/run_model_example.py
 
 Gestionnaire qui formate un prompt, envoie la requête au modèle et retourne un objet `Extraction` (response, target_object, obstacles, status, confidence). Supporte un mode “chat:” pour du texte libre.
 
-**Utilisation :**
+**Utilisation windows:**
 ```bash
 cd src
 python ./SLM/SLM_Manager.py
+```
+
+**Utilisation Jetson:**
+```bash
+cd src
+python -m SLM.SLM_Manager
 ```
 
 ## Personnalisation du modèle
