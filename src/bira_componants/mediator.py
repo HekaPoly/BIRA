@@ -4,13 +4,16 @@ class BiraMediator:
     def __init__(self):
         self.queue = asyncio.Queue()
         self.handlers = {}
+        self.name = "mediator"
 
     def register(self, name, handler):
         self.handlers[name] = handler
 
     # Broadcast
     async def send(self, sender, message):
-        await self.queue.put(("broadcast", sender, None, message))
+        if isinstance(message, str):
+            message = {message: None}
+        await self.queue.put(("broadcast", sender.name, None, message))
 
     # One-to-one
     async def send_to(self, sender, target, message):
@@ -19,7 +22,8 @@ class BiraMediator:
     async def run(self):
         while True:
             msg_type, sender, target, message = await self.queue.get()
-
+            print("MEDIATOR GOT:", msg_type, message)
+            
             if msg_type == "broadcast":
                 for name, handler in self.handlers.items():
                     if name != sender:

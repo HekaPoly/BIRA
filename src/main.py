@@ -27,8 +27,8 @@ async def main():
     speech_to_text = SpeechToText(mediator=mediator)
     slm = None
     
-    await mediator.send(None, "initialize_components")
-    await mediator.send(None, "sleep_mode")
+    await mediator.send(mediator, {"initialize_components":None})
+    await mediator.send(mediator, {"sleep_mode": None})
     asyncio.create_task(mediator.run())
     
     

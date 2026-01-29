@@ -7,7 +7,7 @@ from serial import Serial
 from serial.tools import list_ports
 from time import sleep
 
-from bira_componants.bira_componant import BiraComponent
+from .bira_componant import BiraComponent
 
 
 class UARTTransmitter(BiraComponent):
@@ -24,6 +24,10 @@ class UARTTransmitter(BiraComponent):
         self.angle_shift = angle_shift
         self.bytes = bytes
         self.uart_init_delay = uart_init_delay
+        
+    async def receive(self, message):
+        print(self.name)
+        pass
 
     def get_serial_ports_list(self) -> list:
         """ 

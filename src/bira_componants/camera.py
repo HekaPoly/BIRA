@@ -2,9 +2,7 @@ from threading import Lock
 import pyzed.sl as sl
 import cv2
 
-from bira_componant import BiraComponent
-
-
+from .bira_componant import BiraComponent
 
 class Camera(BiraComponent):
     __lock = Lock()
@@ -36,8 +34,9 @@ class Camera(BiraComponent):
         elif message.keys().__contains__('close_camera'):
             self.close()
         elif message.keys().__contains__('detect_objects_request'):
+            print('start detect_objects_request')
             frame = self.get_frame()
-            self.mediator.notify(self, {"detect_objects_1": frame})
+            self.mediator.send(self, {"detect_objects_1": frame})
 
 
     def get_camera(self):

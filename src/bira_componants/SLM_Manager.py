@@ -6,7 +6,7 @@ import argparse
 from ollama import Client
 import subprocess
 
-from bira_componants.bira_componant import BiraComponent
+from .bira_componant import BiraComponent
 
 
 SYSTEM_BIRA = """
@@ -83,30 +83,30 @@ class SLM_Manager(BiraComponent):
             
         elif message.keys().__contains__('detect_objects_ready'):
             self.detections = message['detect_objects_ready']
-            self.mediator.notify(self, "generate_response")
+            self.mediator.send(self, "generate_response")
             
         elif message.keys().__contains__('transcription_ready'):
             self.transcription = message['transcription_ready']
             self.prompt = f"Analyse la commande suivante et décide de l'action à entreprendre : '{self.transcription}'. Les objets détectés sont : {json.dumps(self.detections)}. Réponds en JSON selon les règles."
-            self.mediator.notify(self, "generate_response")
+            self.mediator.send(self, "generate_response")
             
         elif message.keys().__contains__('generate_response'):
             if self.prompt is None or self.detections is None:
                 return
             
             response = self.generate_response(self.prompt)
-            await self.mediator.notify(self, {"response_ready": response})
+            await self.mediator.send(self, {"response_ready": response})
 
             if response["mode"] == "confirmation":
-                self.mediator.notify(self, {"eating": None})
+                self.mediator.send(self, {"eating": None})
                 # Execute eating action
                 # Verifier expression 
-                self.mediator.notify(self, {"sleep": None})
+                self.mediator.send(self, {"sleep": None})
                 
             elif response["mode"] == "clarification": 
-                self.mediator.notify(self, {"transcription_request": None})
+                self.mediator.send(self, {"transcription_request": None})
             elif response["mode"] == "stop":
-                self.mediator.notify(self, {"sleep": None})
+                self.mediator.send(self, {"sleep": None})
                 self.images = None
                 self.prompt = None
                 

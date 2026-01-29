@@ -2,7 +2,10 @@ import sounddevice as sd
 import numpy as np
 import wave
 
-from bira_componants.bira_componant import BiraComponent
+import asyncio
+
+
+from .bira_componant import BiraComponent
 
 
 class Micro(BiraComponent):
@@ -26,13 +29,16 @@ class Micro(BiraComponent):
         
     async def receive(self, message):
         if message.keys().__contains__('transcription_request'):
+            print('start transcription_request')
             self.record(duration=5)
             self.save_recording('recording.wav')
-            self.mediator.notify(self, "transcribe_1")
-        elif message.keys().__contains__('sleep'):
+            self.mediator.send(self, "transcribe_1")
+        elif message.keys().__contains__('sleep_mode'):
             self.wait_for_volume(threshold=0.02)
-            self.mediator.notify(self, "detect_objects_request")
-            self.mediator.notify(self, "transcription_request")
+            await asyncio.gather(
+                self.mediator.send(self, "detect_objects_request"),
+                self.mediator.send(self, "transcription_request"),
+            )
             
 
     def start_recording(self):
@@ -140,41 +146,34 @@ class Micro(BiraComponent):
         print(f"File saved: {filename}")
     
     def get_volume(self):
-        """
-        Compute the average volume of the recording using RMS (Root Mean Square).
-
-        Parameters:
-            None
-
-        Returns:
-            float: Average volume level (0.0 to 1.0).
-        """
         if self.audio_data is None or len(self.audio_data) == 0:
             return 0.0
-        normalized = self.audio_data.astype(np.float32) / 32768.0
-        rms = np.sqrt(np.mean(normalized ** 2))
-        return rms
-    
+
+        # Cas 1 : streaming (liste de chunks)
+        if isinstance(self.audio_data, list):
+            audio = np.concatenate(self.audio_data)
+        else:
+            audio = self.audio_data
+
+        audio = audio.astype(np.float32) / 32768.0
+        return float(np.sqrt(np.mean(audio ** 2)))
+
     def wait_for_volume(self, threshold=0.02):
-        """
-        Wait until the audio volume exceeds a certain threshold.
-
-        Parameters:
-            threshold (float): Volume threshold to detect a command (default: 0.02).
-
-        Returns:
-            None
-        """
         self.start_recording()
+
         while True:
             sd.sleep(100)
-            if self.audio_data is not None and len(self.audio_data) > 0:
-                volume = self.get_volume()
+
+            if self.audio_data and len(self.audio_data) > 0:
+                last_chunk = self.audio_data[-1] 
+                audio = last_chunk.astype(np.float32) / 32768.0
+                volume = np.sqrt(np.mean(audio ** 2))
+
                 if volume >= threshold:
                     print(f"Command detected with volume: {volume:.3f}")
                     break
-        self.stop_recording()
-        self.mediator.notify(self, "volume_detected")
+
+
 
 if __name__ == "__main__":
     my_micro = Micro(frequency=16000)

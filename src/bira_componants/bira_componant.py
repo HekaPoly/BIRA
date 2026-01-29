@@ -1,5 +1,3 @@
-from mediator import BiraMediator   
-
 class BiraComponent:
     def __init__(self, name, mediator):
         self.name = name
@@ -13,4 +11,5 @@ class BiraComponent:
         await self.mediator.send_to(sender, target, message)
 
     async def receive(self, message):
-        raise NotImplementedError("Subclasses must implement this method")
+        print(self.name)
+        raise NotImplementedError(f"{self.name}: Subclasses must implement this method")

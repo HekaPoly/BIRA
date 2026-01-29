@@ -4,11 +4,11 @@ import pyzed.sl as sl
 from ultralytics import YOLO
 import cv2
 import time
-from camera import Camera
 import argparse
-import history as rd
 
-from bira_componants.bira_componant import BiraComponent
+from .camera import Camera
+from . import history as rd
+from .bira_componant import BiraComponent
 
 
 class ComputerVision(BiraComponent):
@@ -28,7 +28,7 @@ class ComputerVision(BiraComponent):
     async def receive(self, message):
         if message.keys().__contains__('detect_objects_1'):
             result = await self.detect(message['detect_objects_1'])
-            self.mediator.notify(self, {"detect_objects_ready": result})
+            self.mediator.send(self, {"detect_objects_ready": result})
 
     def __xywh2abcd(self, xywh):
         """Converts the bounding boxes from xywh format to abcd format
