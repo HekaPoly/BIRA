@@ -17,10 +17,22 @@ import cv2
 import pyzed.sl as sl
 from camera import Camera
 
+def convert_dlib_landmarks_to_np_array(landmarks) :
+    points = []
+    for i in range(landmarks.num_parts):
+        points.append((landmarks.part(i).x, landmarks.part(i).y))
+    return np.array(points, dtype=np.int32)
+
+def convert_dlib_BB_to_openCV_BB(rect):
+    x = rect.left()
+    y = rect.top()
+    w = rect.right() - rect.left()
+    h = rect.bottom() - rect.top()
+    return (x, y, w, h)
 
 if (__name__ == "__main__"):
     #load the pretrained face detector from dlib
-    detector = detector = dlib.get_frontal_face_detector()
+    detector = dlib.get_frontal_face_detector()
     #load the facial landmark predictor (97 358 KB)
     predictor = dlib.shape_predictor("/path-to-the-pretrained-model")
 
@@ -30,21 +42,22 @@ if (__name__ == "__main__"):
     with myCamera:
         if (myCamera.grab() == sl.ERROR_CODE.SUCCESS):
             image = myCamera.get_frame()
+        else:
+            print("brooo the camera doesn't work :(")
 
-    # we need resize the image
-    resize(image, width = 500)
+    # resizing the image can positvely impact the computing time
     #convert the image to grayscale
     grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # upscale the image and get BB of the face can also work with RGB image
     face_BB = detector(grayScale_image, 1)
 
-    for (index, BB) in face_BB:
+    for BB in face_BB:
         #get the facial landmarks coordinates (x,y)
         landmarks = predictor(grayScale_image, BB)
         #convert to np array
-        landmarks = convertTonp(landmarks)
+        landmarks = convert_dlib_landmarks_to_np_array(landmarks)
         #convert to openCv BB
-        (x, y, w, h) = convertToOpenCVBB(BB)
+        (x, y, w, h) = convert_dlib_BB_to_openCV_BB(BB)
         #draw the BB
         cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
         #draw the landmarks
@@ -54,6 +67,3 @@ if (__name__ == "__main__"):
     cv2.imshow("FaceID", image)
     if cv2.waitKey(1) == 27:
         cv2.destroyAllWindows()
-
-
-
