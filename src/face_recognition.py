@@ -65,5 +65,5 @@ if (__name__ == "__main__"):
             cv2.circle(image, (x, y), 1, (0, 0, 255), -1)    
     #show the result
     cv2.imshow("FaceID", image)
-    if cv2.waitKey(1) == 27:
-        cv2.destroyAllWindows()
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
