@@ -1,5 +1,6 @@
 import argparse
 
+from bira_components.manager import BIRA_Manager
 from bira_components.mediator import BiraMediator   
 from bira_components.camera import Camera
 from bira_components.computer_vision import ComputerVision
@@ -8,6 +9,7 @@ from bira_components.micro import Micro
 from bira_components.text_to_speech import TextToSpeech
 from bira_components.speech_to_text import SpeechToText
 from bira_components.SLM_Manager import SLM_Manager
+
     
 def main():
     parser = argparse.ArgumentParser()
@@ -19,21 +21,25 @@ def main():
     opt = parser.parse_args()
     
     
-    mediator = BiraMediator()
-    camera = Camera(mediator=mediator)
-    computer_vision = ComputerVision(opt, mediator=mediator)
-    uart_transmitter = UARTTransmitter(mediator=mediator)
-    micro = Micro(mediator=mediator)
-    text_to_speech = TextToSpeech(mediator=mediator)
-    speech_to_text = SpeechToText(mediator=mediator, language="fr")
-    slm = SLM_Manager(mediator=mediator)
+    # mediator = BiraMediator()
+    # camera = Camera(mediator=mediator)
+    # computer_vision = ComputerVision(opt, mediator=mediator)
+    # uart_transmitter = UARTTransmitter(mediator=mediator)
+    # micro = Micro(mediator=mediator)
+    # text_to_speech = TextToSpeech(mediator=mediator)
+    # speech_to_text = SpeechToText(mediator=mediator, language="fr")
+    # slm = SLM_Manager(mediator=mediator)
     
-    mediator.send(mediator, {"initialize_components": None})
-    mediator.send(mediator, {"sleep_mode": None})
+    # mediator.send(mediator, {"initialize_components": None})
+    # mediator.send(mediator, {"sleep_mode": None})
     
-    print(mediator.handlers)
-    # mediator.send_to(target=speech_to_text, sender=mediator, message={"transcribe_1": "recording.wav"})     
-    mediator.run()
+    # print(mediator.handlers)
+    # # mediator.send_to(target=speech_to_text, sender=mediator, message={"transcribe_1": "recording.wav"})     
+    # mediator.run()
+
+    bira_manager = BIRA_Manager()
+    while True:
+        bira_manager.handle()
     
     
 if __name__ == "__main__":

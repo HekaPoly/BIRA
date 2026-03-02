@@ -15,7 +15,7 @@ class BIRA_Manager:
         self.camera = Camera(self.mediator)
         self.computer_vision = ComputerVision(self.mediator)
         self.uart_transmitter = UARTTransmitter(self.mediator)
-        self.micro = Micro(self.mediator)
+        self.micro = Micro()
         self.text_to_speech = TextToSpeech(self.mediator)
         self.speech_to_text = SpeechToText(self.mediator)
         self.slm_manager = SLM_Manager(self.mediator)
@@ -30,8 +30,10 @@ class BIRA_Manager:
     
     def change_state(self, new_state):
         self.state = new_state
-        print(f"State changed to: {self.state.get_name()}")
+        print(f"State changed to: {self.state.__class__.__name__}")
 
-    def handle(self, message):
-        self.state.handle(message)
+    def handle(self):
+        self.state.handle(self.context)
         pass
+
+    
