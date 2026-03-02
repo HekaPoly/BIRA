@@ -6,7 +6,7 @@ import wave
 import asyncio
 
 
-from .bira_componant import BiraComponent
+from .bira_component import BiraComponent
 
 
 class Micro(BiraComponent):

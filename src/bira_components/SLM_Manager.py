@@ -7,7 +7,7 @@ from cv_viewer import labels
 from ollama import Client
 import subprocess
 
-from .bira_componant import BiraComponent
+from .bira_component import BiraComponent
 
 
 def _parse_first_json(text: str) -> dict:

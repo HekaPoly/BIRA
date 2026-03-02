@@ -1,13 +1,13 @@
 import argparse
 
-from bira_componants.mediator import BiraMediator   
-from bira_componants.camera import Camera
-from bira_componants.computer_vision import ComputerVision
-from bira_componants.uart_transmitter import UARTTransmitter
-from bira_componants.micro import Micro
-from bira_componants.text_to_speech import TextToSpeech
-from bira_componants.speech_to_text import SpeechToText
-from bira_componants.SLM_Manager import SLM_Manager
+from bira_components.mediator import BiraMediator   
+from bira_components.camera import Camera
+from bira_components.computer_vision import ComputerVision
+from bira_components.uart_transmitter import UARTTransmitter
+from bira_components.micro import Micro
+from bira_components.text_to_speech import TextToSpeech
+from bira_components.speech_to_text import SpeechToText
+from bira_components.SLM_Manager import SLM_Manager
     
 def main():
     parser = argparse.ArgumentParser()

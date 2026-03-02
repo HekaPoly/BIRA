@@ -2,7 +2,7 @@ import os
 
 from openai import OpenAI
 
-from bira_componants.bira_componant import BiraComponent
+from bira_components.bira_component import BiraComponent
 
 # Toggle: True = OpenAI Whisper API, False = local whisper model
 USE_OPENAI_API = True

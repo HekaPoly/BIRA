@@ -2,7 +2,7 @@ import asyncio
 import pyttsx3
 import random
 
-from .bira_componant import BiraComponent
+from .bira_component import BiraComponent
 
 
 class TextToSpeech(BiraComponent):

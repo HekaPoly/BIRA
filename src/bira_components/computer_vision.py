@@ -8,7 +8,7 @@ import argparse
 
 from .camera import Camera
 from . import history as rd
-from .bira_componant import BiraComponent
+from .bira_component import BiraComponent
 
 
 class ComputerVision(BiraComponent):
