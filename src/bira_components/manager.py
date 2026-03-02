@@ -32,8 +32,10 @@ class BIRA_Manager:
         self.state = new_state
         print(f"State changed to: {self.state.__class__.__name__}")
 
-    def handle(self):
+    def _handle(self):
         self.state.handle(self.context)
-        pass
 
-    
+    def run(self):
+        while True:
+            self._handle()
+

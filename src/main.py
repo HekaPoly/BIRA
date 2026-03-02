@@ -38,8 +38,7 @@ def main():
     # mediator.run()
 
     bira_manager = BIRA_Manager()
-    while True:
-        bira_manager.handle()
+    bira_manager.run()
     
     
 if __name__ == "__main__":
