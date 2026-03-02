@@ -19,6 +19,7 @@ class BIRA_Manager:
         self.text_to_speech = TextToSpeech(self.mediator)
         self.speech_to_text = SpeechToText(self.mediator)
         self.slm_manager = SLM_Manager(self.mediator)
+        
         self.state = IdleState(self)
         self.context = {
             "objects_detected": [],
