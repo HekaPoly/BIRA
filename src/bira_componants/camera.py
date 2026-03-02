@@ -2,9 +2,9 @@ from threading import Lock
 import pyzed.sl as sl
 import cv2
 
+from .bira_componant import BiraComponent
 
-
-class Camera:
+class Camera(BiraComponent):
     __lock = Lock()
     __instance =  None
 
@@ -17,7 +17,8 @@ class Camera:
 
         return Camera.__instance
     
-    def __init__(self):
+    def __init__(self, mediator=None):
+        super().__init__("camera", mediator)
         if self.isInitialised is False:
             with Camera.__lock:
                 if self.isInitialised is False:
@@ -26,9 +27,21 @@ class Camera:
                     self.__camera_pose = sl.Pose()
                     self.__image = sl.Mat()
                     self.isInitialised = True
-                    
-
     
+    def receive(self, message):
+        if message.keys().__contains__('initialize_components'):
+            self.open()
+        elif message.keys().__contains__('close_camera'):
+            self.close()
+        elif message.keys().__contains__('detect_objects_request'):
+            print('start detect_objects_request')
+            if self.grab() == sl.ERROR_CODE.SUCCESS:
+                frame = self.get_frame()
+                self.mediator.send_to(self, "computer_vision", {"detect_objects_1": frame})
+            else:
+                self.mediator.send_to(self, "computer_vision", {"detect_objects_1": None})
+
+
     def get_camera(self):
         return self.__zed
         

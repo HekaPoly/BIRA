@@ -1,16 +1,20 @@
+import asyncio
 import numpy as np
 import pyzed.sl as sl
 from ultralytics import YOLO
 import cv2
 import time
-from camera import Camera
 import argparse
-import history as rd
+
+from .camera import Camera
+from . import history as rd
+from .bira_componant import BiraComponent
 
 
-class ComputerVision:
+class ComputerVision(BiraComponent):
 
-    def __init__(self, opt = None):
+    def __init__(self, opt = None, mediator=None):
+        super().__init__("computer_vision", mediator)
         self.__detections = None
         self.__opt = opt
 
@@ -18,8 +22,19 @@ class ComputerVision:
         self.yolo = YOLO(opt.weights)
         self.yolo.model.to('cuda')
         self.yolo.model.eval()
+        self._lock = asyncio.Lock()
         print("Network initialized")
-    
+        
+    def receive(self, message):
+        if message.keys().__contains__('detect_objects_1'):
+            frame = message['detect_objects_1']
+            if frame is None:
+                return
+            sl_object = self.detect(frame)
+            # Send YOLO labels so SLM has detections even when ZED object_list is empty
+            detection_labels = [int(obj.label.item() if hasattr(obj.label, "item") else obj.label) for obj in self.__detections]
+            self.mediator.send_to(self, "SLM_Manager", {"detect_objects_ready": sl_object, "detection_labels": detection_labels})
+
     def __xywh2abcd(self, xywh):
         """Converts the bounding boxes from xywh format to abcd format
         Parameters:
@@ -75,6 +90,29 @@ class ComputerVision:
         return output
             
     
+    # def predict_async(self, audio_path):
+    #     return asyncio.to_thread(
+    #         self.yolo.predict,
+    #         audio_path,
+    #         imgsz=self.__opt.img_size,
+    #         conf=self.__opt.conf_thres
+    #     )
+    
+    def suppress_specular(img_bgr):
+        hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+        h, s, v = cv2.split(hsv)
+
+        # Detect specular pixels: bright + low saturation
+        specular_mask = (v > 220) & (s < 40)
+
+        # Reduce intensity of specular highlights
+        v = v.astype(np.float32)
+        v[specular_mask] *= 0.6
+        v = np.clip(v, 0, 255).astype(np.uint8)
+
+        hsv_filtered = cv2.merge([h, s, v])
+        return cv2.cvtColor(hsv_filtered, cv2.COLOR_HSV2BGR)
+    
     def detect(self, frame, iou_thres=0.45):
         """Detects the objects present in the frame given.
         Parameters:
@@ -92,8 +130,8 @@ class ComputerVision:
         self.__detections = self.__detections_to_custom_box(detections)
         
         # -- Ingest detections
-        Camera().get_camera().ingest_custom_box_objects(self.__detections)
-        Camera().get_camera().retrieve_objects(objects, obj_runtime_param)
+        Camera(self.mediator).get_camera().ingest_custom_box_objects(self.__detections)
+        Camera(self.mediator).get_camera().retrieve_objects(objects, obj_runtime_param)
         
         object_list = objects.object_list
         rd.write_history(object_list)
