@@ -9,9 +9,11 @@ from bira_components.text_to_speech import TextToSpeech
 from bira_components.uart_transmitter import UARTTransmitter
 
 DEFAULT_CONTEXT = {
-            "objects_detected": [],
+            "sl_object": [],
+            "detection_labels": [],
             "user_input": "",
             "feedback": "",
+            "response_code": 0,
             "object_selected": None
         }
 

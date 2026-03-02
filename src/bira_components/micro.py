@@ -2,12 +2,8 @@ from time import sleep
 import sounddevice as sd
 import numpy as np
 import wave
-
 import asyncio
-
-
 from .bira_component import BiraComponent
-
 
 class Micro(BiraComponent):
     def __init__(self, frequency=44100, device=None):
@@ -28,16 +24,15 @@ class Micro(BiraComponent):
         self.stream = None
 
 
+    def record(self):
+        print('start transcription_request')
+        self._record(duration=5)
+        self._save_recording('recording.wav')
+
     def sleep_mode(self):
         self.wait_for_volume(threshold=0.2)
-        
 
-    def start_transcription(self):
-        print('start transcription_request')
-        self.record(duration=5)
-        self.save_recording('recording.wav')        
-
-    def start_recording(self):
+    def _start_recording(self):
         """
         Start recording audio from the selected device.
         Does nothing if a recording is already in progress.
@@ -59,14 +54,14 @@ class Micro(BiraComponent):
             channels=1,
             dtype="int16",
             device=self.device,
-            callback=self.get_stream
+            callback=self._get_stream
         )
 
         self.stream.start()
         self.is_recording = True
         print("Recording started")
 
-    def get_stream(self, data, frames, time, status):
+    def _get_stream(self, data, frames, time, status):
         """
         Internal callback function used by sounddevice to collect audio data.
 
@@ -83,7 +78,7 @@ class Micro(BiraComponent):
             print(f"Status: {status}")
         self.audio_data.append(data.copy())
 
-    def stop_recording(self):
+    def _stop_recording(self):
         """
         Stop the current recording and finalize the audio data.
         Does nothing if no recording is active.
@@ -108,7 +103,7 @@ class Micro(BiraComponent):
         self.is_recording = False
         print("Recording stopped")
 
-    def record(self, duration=5):
+    def _record(self, duration=5):
         """
         Record audio automatically for a given duration.
 
@@ -116,12 +111,12 @@ class Micro(BiraComponent):
             duration (int): Duration of the recording in seconds (default: 5).
         """
         print(f"Recording for {duration} seconds")
-        self.start_recording()
+        self._start_recording()
         sd.sleep(duration * 1000)
-        self.stop_recording()
+        self._stop_recording()
         # TODO: change to sd.rec(...)
 
-    def save_recording(self, filename="recording.wav"):
+    def _save_recording(self, filename="recording.wav"):
         """
         Save the recorded audio as a WAV file.
 
@@ -142,6 +137,8 @@ class Micro(BiraComponent):
             file.writeframes(self.audio_data.tobytes())
         print(f"File saved: {filename}")
     
+
+    # TODO : remove unused method
     def get_volume(self):
         if self.audio_data is None or len(self.audio_data) == 0:
             return 0.0
@@ -155,8 +152,10 @@ class Micro(BiraComponent):
         audio = audio.astype(np.float32) / 32768.0
         return float(np.sqrt(np.mean(audio ** 2)))
 
+
+    # TODO: remove unused method
     def wait_for_volume(self, threshold=0.2):
-        self.start_recording()
+        self._start_recording()
 
         while True:
             sd.sleep(100)
@@ -174,6 +173,6 @@ class Micro(BiraComponent):
 
 if __name__ == "__main__":
     my_micro = Micro(frequency=16000)
-    my_micro.record(duration=3)
-    my_micro.save_recording("recording.wav")
+    my_micro._record(duration=3)
+    my_micro._save_recording("recording.wav")
     print(f"Average volume: {my_micro.get_volume():.3f}")

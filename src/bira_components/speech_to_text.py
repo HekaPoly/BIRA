@@ -31,6 +31,7 @@ class SpeechToText(BiraComponent):
         self.use_openai_api = use_openai_api if use_openai_api is not None else USE_OPENAI_API
         self._client = OpenAI(api_key=OPENAI_API_KEY) if (self.use_openai_api and OPENAI_API_KEY) else None
 
+    #TODO: remove used methods
     def receive(self, message):
         print("STT", message.keys())
         if "transcribe_1" in message:

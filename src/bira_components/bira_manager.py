@@ -26,8 +26,8 @@ class BIRAManager(Mediator):
 
     def speech_task(self):
         print("Starting speech recognition...")
-        self.micro.record(duration=5)
-        self.micro.save_recording('recording.wav')
+        self.micro._record(duration=5)
+        self.micro._save_recording('recording.wav')
         transcribe = self.speech_to_text.transcribe('recording.wav')
         print("Transcription:", transcribe)
 

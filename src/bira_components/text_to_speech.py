@@ -16,16 +16,13 @@ class TextToSpeech(BiraComponent):
         self.engine.setProperty('volume', self.volume)
         self.engine.setProperty('voice', voice)
         self._lock = asyncio.Lock()
-        
-    def receive(self, message):
-        if message.keys().__contains__('speak_request'):
-            self._speak_sync(message['speak_request'])
+
             
     def speak(self, text: str):
         with self._lock:
-            asyncio.to_thread(self._speak_sync, text)
+            asyncio.to_thread(self.speak_sync, text)
 
-    def _speak_sync(self, text: str):
+    def speak_sync(self, text: str):
         """
         Convert the given text to speech and play it.
         Parameters:

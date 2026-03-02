@@ -25,7 +25,12 @@ class ComputerVision(BiraComponent):
         self._lock = asyncio.Lock()
         print("Network initialized")
         
-    def receive(self, message):
+    def detect_objects(self, frame):
+        sl_object = self.detect(frame)
+        detection_labels = [int(obj.label.item() if hasattr(obj.label, "item") else obj.label) for obj in self.__detections]
+        return sl_object, detection_labels
+        
+        # TODO: remove old code after testing
         if message.keys().__contains__('detect_objects_1'):
             frame = message['detect_objects_1']
             if frame is None:
