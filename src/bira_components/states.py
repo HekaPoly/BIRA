@@ -22,7 +22,7 @@ class ListeningState(State):
     def handle(self, context):
         print("Entering Listening State")
         self.bira_manager.micro.start_transcription()
-        self
+        self.bira_manager.change_state(VisionState(self.bira_manager))
 
 class VisionState(State):
     def handle(self, context):
