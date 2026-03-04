@@ -5,17 +5,20 @@
 # from bira_components.micro import Micro
 # from bira_components.speech_to_text import SpeechToText
 import bira_components.states as states
+from bira_components.codes import ListeningCode, VisionCode, PlanificationCode, ExecutionCode
 # from bira_components.text_to_speech import TextToSpeech
 # from bira_components.uart_transmitter import UARTTransmitter
 
 DEFAULT_CONTEXT = {
-            "sl_object": [],
+            "objects_detected": [],
             "detection_labels": [],
             "user_input": "",
             "feedback": "",
-            "response_code": 0,
             "object_selected": None,
-            "user_wants_idle_state": False
+            "listening_code": ListeningCode.NO_RESPONSE, # -1 for error, 0 for not activated, 1 for success, 2 for no input
+            "vision_code": VisionCode.NO_RESPONSE, # -1 for error, 0 for not activated, 1 for success, 2 for no object detected
+            "planification_code": PlanificationCode.NO_RESPONSE, # -1 for error, 0 for not activated, 1 for success, 2 for unclear command, 3 for unable to plan, 4 for idle
+            "execution_code": ExecutionCode.NO_RESPONSE, # -1 for error, 0 for not activated, 1 for success, 2 for unable to move, 3 for stuck, 4 for unreachable object
         }
 
 class BIRA_Manager:
@@ -33,13 +36,16 @@ class BIRA_Manager:
         self._data = DEFAULT_CONTEXT.copy()
         self.counter = 0
     
-    def change_state(self, new_state):
-        self.state = new_state
-        print(f"State changed to: {self.state}")
+    def increment_counter(self):
+        self.counter += 1
+        if self.counter > 3:
+            print("Looped three times. Forced exit.")
+            self.change_state(states.ExitState(self))
     
-    def set_objects_detected(self, objects):
+    def set_objects_detected(self, objects, labels):
         self._data["objects_detected"] = objects
-    
+        self._data["detection_labels"] = labels
+
     def set_user_input(self, user_input: str):
         self._data["user_input"] = user_input
     
@@ -49,20 +55,48 @@ class BIRA_Manager:
     def set_object_selected(self, obj):
         self._data["object_selected"] = obj
     
-    def set_response_code(self, code):
-        self._data["response_code"] = code
-
-    def set_user_wants_idle_state(self, wants_idle_state: bool):
-        self._data["user_wants_idle_state"] = wants_idle_state
+    def set_listening_code(self, code: ListeningCode):
+        self._data["listening_code"] = code
+    
+    def set_vision_code(self, code: VisionCode):
+        self._data["vision_code"] = code
+    
+    def set_planification_code(self, code: PlanificationCode):
+        self._data["planification_code"] = code
+    
+    def set_execution_code(self, code: ExecutionCode):
+        self._data["execution_code"] = code
 
     def get_data(self):
         return self._data
 
     def reset_data(self):
         self._data = DEFAULT_CONTEXT.copy()
+    
+    def change_state(self, new_state):
+        self.state = new_state
+        print(f"Entering {self.state}")
+        match str(self.state):
+            case "IdleState":
+                self.reset_data()
+            case "ListeningState":
+                self.increment_counter()
+                self.set_user_input("")
+                self.set_vision_code(VisionCode.NO_RESPONSE)
+            case "VisionState":
+                self.set_objects_detected([], [])
+                self.set_object_selected(None)
+                self.set_vision_code(VisionCode.NO_RESPONSE)
+            case "PlanningState":
+                self.set_planification_code(PlanificationCode.NO_RESPONSE)
+            case "ExecutingState":
+                self.set_execution_code(ExecutionCode.NO_RESPONSE)
+            case _:
+                pass
 
     def _handle(self):
         self.state.handle()
+        self.state.decide_next_state()
 
     def run(self):
         while True:
