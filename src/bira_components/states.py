@@ -12,43 +12,62 @@ class State(ABC):
     def __init__(self, bira_manager: BIRA_Manager):
         self.bira_manager = bira_manager
     
+    def handle(self):
+        self._prepare()
+        self._handle()
+        self._decide_next_state()
+    
     @abstractmethod
     def __str__(self):
         pass
 
     @abstractmethod
-    def handle(self):
+    def _prepare(self):
         pass
 
     @abstractmethod
-    def decide_next_state(self):
+    def _handle(self):
+        pass
+
+    @abstractmethod
+    def _decide_next_state(self):
         pass
 
 class IdleState(State):
     def __str__(self):
         return "IdleState"
 
-    def handle(self):
+    def _prepare(self):
+        self.bira_manager.reset_data()
+
+    def _handle(self):
         # TODO: Implement actual sleep logic using self.bira_manager.micro
         # self.bira_manager.micro.sleep_mode()
         pass
     
-    def decide_next_state(self):
+    def _decide_next_state(self):
         print("Wake up")
         self.bira_manager.change_state(ListeningState(self.bira_manager))
+
     
 class ListeningState(State):
     def __str__(self):
         return "ListeningState"
-    
-    def handle(self):
+
+    def _prepare(self):
+        self.bira_manager.increment_counter()
+        self.bira_manager.set_user_input("")
+        self.bira_manager.set_vision_code(VisionCode.NO_RESPONSE)
+        
+    def _handle(self):
+        
         # TODO: Implement actual listening logic using self.bira_manager.micro and self.bira_manager.speech_to_text
         # self.bira_manager.micro.record()
         # result = self.bira_manager.speech_to_text.transcribe()
         # self.bira_manager.set_user_input(result)
         pass
 
-    def decide_next_state(self):
+    def _decide_next_state(self):
         listening_code = self.bira_manager.get_data()["listening_code"]
 
         match listening_code:
@@ -70,20 +89,25 @@ class ListeningState(State):
                 # TODO: Send feedback to user via text-to-speech
                 self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(IdleState(self.bira_manager))
-    
 
 class VisionState(State):
     def __str__(self):
         return "VisionState"
     
-    def handle(self):
+    def _prepare(self):
+        self.bira_manager.set_objects_detected([])
+        self.bira_manager.set_object_selected(None)
+        self.bira_manager.set_vision_code(VisionCode.NO_RESPONSE)
+
+    def _handle(self):
+
         # TODO: Perform actions specific to Vision state
         # sl_object, dectection_labels = self.bira_manager.computer_vision.detect_objects()
         # self.bira_manager.set_objects_detected(sl_object)
         # self.bira_manager.set_detection_labels(dectection_labels)
         pass
     
-    def decide_next_state(self):
+    def _decide_next_state(self):
         vision_code = self.bira_manager.get_data()["vision_code"]
         match vision_code:
             case VisionCode.ERROR:
@@ -104,18 +128,21 @@ class VisionState(State):
                 # TODO: Send feedback to user via text-to-speech
                 self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(ListeningState(self.bira_manager))
-
+    
 class PlanningState(State):
     def __str__(self):
         return "PlanningState"
     
-    def handle(self):
+    def _prepare(self):
+        self.bira_manager.set_planification_code(PlanificationCode.NO_RESPONSE)
+
+    def _handle(self):
         # TODO: Perform actions specific to Planning state
         # For example, analyze data from VisionState and make decisions
         # If successful, set feedback and plan next actions
         pass
 
-    def decide_next_state(self):
+    def _decide_next_state(self):
         planification_code = self.bira_manager.get_data()["planification_code"]
 
         match planification_code:
@@ -156,12 +183,15 @@ class ExecutingState(State):
     def __str__(self):
         return "ExecutingState"
     
-    def handle(self):
+    def _prepare(self):
+        self.bira_manager.set_execution_code(ExecutionCode.NO_RESPONSE)
+    
+    def _handle(self):
         # Perform actions specific to Executing state
         # For example, send commands to actuators or perform a task based on the response generated in RespondingState
         sleep(5)
     
-    def decide_next_state(self):
+    def _decide_next_state(self):
         execution_code = self.bira_manager.get_data()["execution_code"]
 
         match execution_code:
@@ -200,13 +230,17 @@ class ExecutingState(State):
 class ExitState(State):
     def __str__(self):
         return "ExitState"
+
+    def _prepare(self):
+        # Keep the information about the error that caused the exit in the feedback, to be able to send it to the user or save it for later analysis
+        pass
     
-    def handle(self):
+    def _handle(self):
         # Perform actions specific to Exit state
         # For example, clean up resources, save state, or perform any necessary shutdown procedures
         print("Exiting the system. Cleaning up resources and shutting down.")
         exit(0)
     
-    def decide_next_state(self):
+    def _decide_next_state(self):
         # No next state to transition to since this is the exit state
         pass

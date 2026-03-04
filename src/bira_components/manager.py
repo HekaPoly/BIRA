@@ -76,29 +76,8 @@ class BIRA_Manager:
     def change_state(self, new_state):
         self.state = new_state
         print(f"Entering {self.state}")
-        match str(self.state):
-            case "IdleState":
-                self.reset_data()
-            case "ListeningState":
-                self.increment_counter()
-                self.set_user_input("")
-                self.set_vision_code(VisionCode.NO_RESPONSE)
-            case "VisionState":
-                self.set_objects_detected([], [])
-                self.set_object_selected(None)
-                self.set_vision_code(VisionCode.NO_RESPONSE)
-            case "PlanningState":
-                self.set_planification_code(PlanificationCode.NO_RESPONSE)
-            case "ExecutingState":
-                self.set_execution_code(ExecutionCode.NO_RESPONSE)
-            case _:
-                pass
-
-    def _handle(self):
-        self.state.handle()
-        self.state.decide_next_state()
 
     def run(self):
         while True:
-            self._handle()
+            self.state.handle()
 
