@@ -1,12 +1,12 @@
-from bira_components import SLM_Manager
-from bira_components.camera import Camera
-from bira_components.computer_vision import ComputerVision
-from bira_components.mediator import BiraMediator
-from bira_components.micro import Micro
-from bira_components.speech_to_text import SpeechToText
-from bira_components.states import IdleState
-from bira_components.text_to_speech import TextToSpeech
-from bira_components.uart_transmitter import UARTTransmitter
+# from bira_components import SLM_Manager
+# from bira_components.camera import Camera
+# from bira_components.computer_vision import ComputerVision
+# from bira_components.mediator import BiraMediator
+# from bira_components.micro import Micro
+# from bira_components.speech_to_text import SpeechToText
+import bira_components.states as states
+# from bira_components.text_to_speech import TextToSpeech
+# from bira_components.uart_transmitter import UARTTransmitter
 
 DEFAULT_CONTEXT = {
             "sl_object": [],
@@ -14,27 +14,28 @@ DEFAULT_CONTEXT = {
             "user_input": "",
             "feedback": "",
             "response_code": 0,
-            "object_selected": None
+            "object_selected": None,
+            "user_wants_idle_state": False
         }
 
 class BIRA_Manager:
     def __init__(self):
         # self.mediator = BiraMediator()
-        self.camera = Camera(self.mediator)
-        self.computer_vision = ComputerVision(self.mediator)
-        self.uart_transmitter = UARTTransmitter(self.mediator)
-        self.micro = Micro()
-        self.text_to_speech = TextToSpeech(self.mediator)
-        self.speech_to_text = SpeechToText(self.mediator)
-        self.slm_manager = SLM_Manager(self.mediator)
+        # self.camera = Camera(self.mediator)
+        # self.computer_vision = ComputerVision(self.mediator)
+        # self.uart_transmitter = UARTTransmitter(self.mediator)
+        # self.micro = Micro()
+        # self.text_to_speech = TextToSpeech(self.mediator)
+        # self.speech_to_text = SpeechToText(self.mediator)
+        # self.slm_manager = SLM_Manager(self.mediator)
 
-        self.state = IdleState(self)
+        self.state = states.IdleState(self)
         self._data = DEFAULT_CONTEXT.copy()
         self.counter = 0
     
     def change_state(self, new_state):
         self.state = new_state
-        print(f"State changed to: {self.state.__class__.__name__}")
+        print(f"State changed to: {self.state}")
     
     def set_objects_detected(self, objects):
         self._data["objects_detected"] = objects
@@ -48,6 +49,12 @@ class BIRA_Manager:
     def set_object_selected(self, obj):
         self._data["object_selected"] = obj
     
+    def set_response_code(self, code):
+        self._data["response_code"] = code
+
+    def set_user_wants_idle_state(self, wants_idle_state: bool):
+        self._data["user_wants_idle_state"] = wants_idle_state
+
     def get_data(self):
         return self._data
 
@@ -55,7 +62,7 @@ class BIRA_Manager:
         self._data = DEFAULT_CONTEXT.copy()
 
     def _handle(self):
-        self.state.handle(self.data)
+        self.state.handle()
 
     def run(self):
         while True:

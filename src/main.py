@@ -1,14 +1,14 @@
 import argparse
 
 from bira_components.manager import BIRA_Manager
-from bira_components.mediator import BiraMediator   
-from bira_components.camera import Camera
-from bira_components.computer_vision import ComputerVision
-from bira_components.uart_transmitter import UARTTransmitter
-from bira_components.micro import Micro
-from bira_components.text_to_speech import TextToSpeech
-from bira_components.speech_to_text import SpeechToText
-from bira_components.SLM_Manager import SLM_Manager
+# from bira_components.mediator import BiraMediator   
+# from bira_components.camera import Camera
+# from bira_components.computer_vision import ComputerVision
+# from bira_components.uart_transmitter import UARTTransmitter
+# from bira_components.micro import Micro
+# from bira_components.text_to_speech import TextToSpeech
+# from bira_components.speech_to_text import SpeechToText
+# from bira_components.SLM_Manager import SLM_Manager
 
     
 def main():
