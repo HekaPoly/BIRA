@@ -15,10 +15,10 @@ DEFAULT_CONTEXT = {
             "user_input": "",
             "feedback": "",
             "object_selected": None,
-            "listening_code": ListeningCode.NO_RESPONSE, # -1 for error, 0 for not activated, 1 for success, 2 for no input
-            "vision_code": VisionCode.NO_RESPONSE, # -1 for error, 0 for not activated, 1 for success, 2 for no object detected
-            "planification_code": PlanificationCode.NO_RESPONSE, # -1 for error, 0 for not activated, 1 for success, 2 for unclear command, 3 for unable to plan, 4 for idle
-            "execution_code": ExecutionCode.NO_RESPONSE, # -1 for error, 0 for not activated, 1 for success, 2 for unable to move, 3 for stuck, 4 for unreachable object
+            "listening_code": ListeningCode.NO_RESPONSE,
+            "vision_code": VisionCode.NO_RESPONSE,
+            "planification_code": PlanificationCode.NO_RESPONSE,
+            "execution_code": ExecutionCode.NO_RESPONSE,
         }
 
 class BIRA_Manager:

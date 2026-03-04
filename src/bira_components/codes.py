@@ -58,9 +58,9 @@ class ExecutionCode(IntEnum):
     -1: error
      0: no response (yet)
      1: success
-     2: unable to move
-     3: stuck
-     4: unreachable object
+     2: unable to move (e.g. the robot is stuck or an object is blocking the way)
+     3: unreachable location (e.g. the object is detected but the robot cannot reach it, or the object has been moved since the vision stage)
+     4: object dropped (e.g. the robot tried to move an object but it was dropped during the movement)
     """
 
     ERROR = -1
