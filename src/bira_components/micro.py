@@ -3,9 +3,8 @@ import sounddevice as sd
 import numpy as np
 import wave
 import asyncio
-from .bira_component import BiraComponent
 
-class Micro(BiraComponent):
+class Micro():
     def __init__(self, frequency=44100, device=None):
         """
         Initialize the Micro object.
