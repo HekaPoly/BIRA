@@ -1,4 +1,7 @@
 from copy import deepcopy
+from dataclasses import asdict
+
+from context import BIRA_Context
 from controller import BIRA_Controller
 import states
 from enums import (
@@ -8,19 +11,6 @@ from enums import (
     ExecutionCode,
     StateCode,
 )
-
-# Context is managed by the BIRA_CONTROLLER, response codes are managed by states.
-DEFAULT_CONTEXT = {
-            "objects_detected": [],
-            "detection_labels": [],
-            "user_inputs": [],
-            "feedbacks": [],
-            "object_selected": None,
-            "listening_code": ListeningCode.NO_RESPONSE,
-            "vision_code": VisionCode.NO_RESPONSE,
-            "planification_code": PlanificationCode.NO_RESPONSE,
-            "execution_code": ExecutionCode.NO_RESPONSE,
-        }
 
 STATE_CLASSES = {
     StateCode.IDLE: states.IdleState,
@@ -35,48 +25,48 @@ class BIRA_Manager:
     def __init__(self):
         self.controller = BIRA_Controller()
         self.state = states.IdleState(self)
-        self._data = deepcopy(DEFAULT_CONTEXT)
+        self._context = BIRA_Context()
         self.counter = 0
     
     def set_objects_detected(self, objects, labels):
-        self._data["objects_detected"] = objects
-        self._data["detection_labels"] = labels
+        self._context.objects_detected = objects
+        self._context.detection_labels = labels
 
     def add_user_input(self, user_input: str):
-        self._data["user_inputs"].append(user_input)
+        self._context.user_inputs.append(user_input)
 
     def add_feedback(self, feedback):
-        self._data["feedbacks"].append(feedback)
+        self._context.feedbacks.append(feedback)
     
     def set_object_selected(self, obj):
-        self._data["object_selected"] = obj
+        self._context.object_selected = obj
     
     def set_listening_code(self, code: ListeningCode):
-        self._data["listening_code"] = code
+        self._context.listening_code = code
     
     def set_vision_code(self, code: VisionCode):
-        self._data["vision_code"] = code
+        self._context.vision_code = code
     
     def set_planification_code(self, code: PlanificationCode):
-        self._data["planification_code"] = code
+        self._context.planification_code = code
     
     def set_execution_code(self, code: ExecutionCode):
-        self._data["execution_code"] = code
+        self._context.execution_code = code
 
     def reset_data(self):
-        self._data = deepcopy(DEFAULT_CONTEXT)
+        self._context = BIRA_Context()
     
     def get_data(self):
-        return self._data
+        return self._context
     
     def get_last_user_input(self):
-        if self._data["user_inputs"]:
-            return self._data["user_inputs"][-1]
+        if self._context.user_inputs:
+            return self._context.user_inputs[-1]
         return None
     
     def get_last_feedback(self):
-        if self._data["feedbacks"]:
-            return self._data["feedbacks"][-1]
+        if self._context.feedbacks:
+            return self._context.feedbacks[-1]
         return None
 
     def change_state(self, next_code: StateCode):

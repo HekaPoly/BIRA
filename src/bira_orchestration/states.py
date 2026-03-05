@@ -76,7 +76,7 @@ class ListeningState(State):
         self.bira_manager.set_listening_code(ListeningCode.SUCCESS)
 
     def _decide_next_state(self):
-        listening_code = self.bira_manager.get_data()["listening_code"]
+        listening_code = self.bira_manager.get_data().listening_code
         feedback = None
         new_state = StateCode.EXIT
 
@@ -121,7 +121,7 @@ class VisionState(State):
         self.bira_manager.set_vision_code(VisionCode.SUCCESS)
     
     def _decide_next_state(self):
-        vision_code = self.bira_manager.get_data()["vision_code"]
+        vision_code = self.bira_manager.get_data().vision_code
         feedback = None
         new_state = StateCode.EXIT
 
@@ -134,7 +134,7 @@ class VisionState(State):
                 new_state = StateCode.EXIT
             case VisionCode.SUCCESS:
                 print("Vision processing successful.")
-                feedback = "J'ai détecté les objets suivants: {0}.".format(self.bira_manager.get_data()["detection_labels"])
+                feedback = "J'ai détecté les objets suivants: {0}.".format(self.bira_manager.get_data().detection_labels)
                 new_state = StateCode.PLANNING
             case VisionCode.NO_OBJECT_DETECTED:
                 print("No objects detected.")
@@ -162,13 +162,13 @@ class PlanningState(State):
         # TODO: Perform actions specific to Planning state
         # For example, analyze data from VisionState and make decisions
         # If successful, set feedback and plan next actions
-        response = self.bira_manager.controller.prompt_slm(self.bira_manager.get_data()["objects_detected"])
+        response = self.bira_manager.controller.prompt_slm(self.bira_manager.get_data().objects_detected)
         self.bira_manager.add_feedback(response.feedback)
         self.bira_manager.set_object_selected(response.object_selected)
         self.bira_manager.set_planification_code(PlanificationCode.SUCCESS)
 
     def _decide_next_state(self):
-        planification_code = self.bira_manager.get_data()["planification_code"]
+        planification_code = self.bira_manager.get_data().planification_code
         feedback = None
         new_state = StateCode.EXIT
 
@@ -221,11 +221,11 @@ class ExecutingState(State):
         # Perform actions specific to Executing state
         # For example, send commands to actuators or perform a task based on the response generated in RespondingState
         
-        self.bira_manager.controller.send_mechanical_command(self.bira_manager.get_data()["object_selected"])
+        self.bira_manager.controller.send_mechanical_command(self.bira_manager.get_data().object_selected)
         self.bira_manager.set_execution_code(ExecutionCode.SUCCESS)
     
     def _decide_next_state(self):
-        execution_code = self.bira_manager.get_data()["execution_code"]
+        execution_code = self.bira_manager.get_data().execution_code
         feedback = None
         new_state = StateCode.EXIT
 
