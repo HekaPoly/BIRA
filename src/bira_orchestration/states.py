@@ -89,7 +89,7 @@ class ListeningState(State):
                 new_state = StateCode.EXIT
             case ListeningCode.SUCCESS:
                 print("Listening processing successful.")
-                feedback = "Vous m'avez demandé: {0}.".format(self.bira_manager.get_last_user_input())
+                feedback = f"Vous m'avez demandé: {self.bira_manager.get_last_user_input()}."
                 new_state = StateCode.VISION
             case ListeningCode.NO_INPUT:
                 print("No voice input received.")
@@ -134,7 +134,7 @@ class VisionState(State):
                 new_state = StateCode.EXIT
             case VisionCode.SUCCESS:
                 print("Vision processing successful.")
-                feedback = "J'ai détecté les objets suivants: {0}.".format(self.bira_manager.get_data().detection_labels)
+                feedback = f"J'ai détecté les objets suivants: {', '.join(self.bira_manager.get_data().detection_labels)}."
                 new_state = StateCode.PLANNING
             case VisionCode.NO_OBJECT_DETECTED:
                 print("No objects detected.")
