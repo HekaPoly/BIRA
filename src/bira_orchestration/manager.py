@@ -1,6 +1,6 @@
-from bira_components.controller import BIRA_Controller
-import bira_components.states as states
-from bira_components.enums import (
+from controller import BIRA_Controller
+import states
+from enums import (
     ListeningCode,
     VisionCode,
     PlanificationCode,

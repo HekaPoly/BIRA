@@ -1,9 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
-from time import sleep
 
-from bira_components.enums import (
+from enums import (
     ListeningCode,
     VisionCode,
     PlanificationCode,
@@ -12,7 +11,7 @@ from bira_components.enums import (
 )
 
 if TYPE_CHECKING:
-    from .manager import BIRA_Manager
+    from manager import BIRA_Manager
 
 class State(ABC):
     code: StateCode
