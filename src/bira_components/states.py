@@ -65,7 +65,10 @@ class ListeningState(State):
         # self.bira_manager.micro.record()
         # result = self.bira_manager.speech_to_text.transcribe()
         # self.bira_manager.set_user_input(result)
-        pass
+
+        # EXAMPLE: Simulate a user input and a successful listening process
+        self.bira_manager.set_user_input("Apporte moi la canette rouge s'il te plait")
+        self.bira_manager.set_listening_code(ListeningCode.SUCCESS)
 
     def _decide_next_state(self):
         listening_code = self.bira_manager.get_data()["listening_code"]
@@ -79,15 +82,15 @@ class ListeningState(State):
                 self.bira_manager.change_state(ExitState(self.bira_manager))
             case ListeningCode.SUCCESS:
                 print("Listening processing successful.")
-                self.bira_manager.set_feedback("Vous m'avez demandé: {0}.").format(self.bira_manager.get_data()["user_input"])
+                self.bira_manager.set_feedback("Vous m'avez demandé: {0}.".format(self.bira_manager.get_data()["user_input"]))
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(VisionState(self.bira_manager))
             case ListeningCode.NO_INPUT:
                 print("No voice input received.")
                 self.bira_manager.set_feedback("Je n'ai pas entendu votre commande. Je vais me remettre en veille.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(IdleState(self.bira_manager))
 
 class VisionState(State):
@@ -95,7 +98,7 @@ class VisionState(State):
         return "VisionState"
     
     def _prepare(self):
-        self.bira_manager.set_objects_detected([])
+        self.bira_manager.set_objects_detected([], [])
         self.bira_manager.set_object_selected(None)
         self.bira_manager.set_vision_code(VisionCode.NO_RESPONSE)
 
@@ -105,7 +108,10 @@ class VisionState(State):
         # sl_object, dectection_labels = self.bira_manager.computer_vision.detect_objects()
         # self.bira_manager.set_objects_detected(sl_object)
         # self.bira_manager.set_detection_labels(dectection_labels)
-        pass
+
+        # EXAMPLE: Simulate a vision process that detects two objects, including the one asked by the user, and is successful
+        self.bira_manager.set_objects_detected(["object1", "object2"], ["canette rouge", "bouteille verte"])
+        self.bira_manager.set_vision_code(VisionCode.SUCCESS)
     
     def _decide_next_state(self):
         vision_code = self.bira_manager.get_data()["vision_code"]
@@ -118,15 +124,15 @@ class VisionState(State):
                 self.bira_manager.change_state(ExitState(self.bira_manager))
             case VisionCode.SUCCESS:
                 print("Vision processing successful.")
-                self.bira_manager.set_feedback("J'ai détecté les objets suivants: {0}.").format(self.bira_manager.get_data()["detection_labels"])
+                self.bira_manager.set_feedback("J'ai détecté les objets suivants: {0}.".format(self.bira_manager.get_data()["detection_labels"]))
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(PlanningState(self.bira_manager))
             case VisionCode.NO_OBJECT_DETECTED:
                 print("No objects detected.")
                 self.bira_manager.set_feedback("Je n'ai détecté aucun objet. Veuillez réessayer.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(ListeningState(self.bira_manager))
     
 class PlanningState(State):
@@ -140,7 +146,9 @@ class PlanningState(State):
         # TODO: Perform actions specific to Planning state
         # For example, analyze data from VisionState and make decisions
         # If successful, set feedback and plan next actions
-        pass
+
+        # EXAMPLE: Simulate a successful planification process
+        self.bira_manager.set_planification_code(PlanificationCode.SUCCESS)
 
     def _decide_next_state(self):
         planification_code = self.bira_manager.get_data()["planification_code"]
@@ -155,28 +163,28 @@ class PlanningState(State):
             case PlanificationCode.SUCCESS:
                 print("Planification processing successful.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(ExecutingState(self.bira_manager))
             case PlanificationCode.UNCLEAR_COMMAND:
                 print("Unclear command. User needs to reformulate.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(ListeningState(self.bira_manager))
             case PlanificationCode.INAPPROPRIATE_REQUEST:
                 print("Inappropriate request. User needs to ask for a valid object.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(ListeningState(self.bira_manager))
             case PlanificationCode.UNDETECTED_OBJECT:
                 print("Object not detected. Vision needs to be redone.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.increment_counter()  # to avoid infinite loop in case of persistent undetected object
                 self.bira_manager.change_state(VisionState(self.bira_manager))
             case PlanificationCode.IDLE:
                 print("Idle state reached in planification. Transitioning to RespondingState with feedback.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(IdleState(self.bira_manager))
 
 class ExecutingState(State):
@@ -189,7 +197,10 @@ class ExecutingState(State):
     def _handle(self):
         # Perform actions specific to Executing state
         # For example, send commands to actuators or perform a task based on the response generated in RespondingState
-        sleep(5)
+        
+        # EXAMPLE: Simulate an execution process that takes some time and is successful
+        sleep(2)
+        self.bira_manager.set_execution_code(ExecutionCode.SUCCESS)
     
     def _decide_next_state(self):
         execution_code = self.bira_manager.get_data()["execution_code"]
@@ -205,26 +216,26 @@ class ExecutingState(State):
                 print("Execution processing successful.")
                 self.bira_manager.set_feedback("J'ai exécuté la tâche demandée. Voulez-vous que je fasse autre chose ?")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(ListeningState(self.bira_manager))
             case ExecutionCode.UNABLE_TO_MOVE:
                 print("Unable to move. I might be blocked or there might be an obstacle.")
                 self.bira_manager.set_feedback("Je n'ai pas pu atteindre l'objet. Il semble qu'il y ait un obstacle ou que je suis bloqué.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(IdleState(self.bira_manager))
             case ExecutionCode.UNREACHABLE_OBJECT:
                 print("Unreachable object. The object might be out of my reach or might have been moved since the vision stage.")
                 self.bira_manager.set_feedback("Je n'ai pas pu atteindre l'objet. Il semble que l'objet soit hors de ma portée ou qu'il ait été déplacé depuis la vision.")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.increment_counter()  # to avoid infinite loop in case of persistent undetected object
                 self.bira_manager.change_state(VisionState(self.bira_manager))
             case ExecutionCode.OBJECT_DROPPED:
                 print("Object dropped. I might have dropped the object during the execution.")
                 self.bira_manager.set_feedback("J'ai laissé tomber l'objet pendant l'exécution. Je suis désolé. Voulez-vous que je réessaye ?")
                 # TODO: Send feedback to user via text-to-speech
-                self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
+                # self.bira_manager.text_to_speech.speak_sync(self.bira_manager.get_data()["feedback"])
                 self.bira_manager.change_state(ListeningState(self.bira_manager))
 
 class ExitState(State):

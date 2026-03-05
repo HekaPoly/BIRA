@@ -38,9 +38,11 @@ class BIRA_Manager:
     
     def increment_counter(self):
         self.counter += 1
+        print(f"Counter incremented to {self.counter}")
         if self.counter > 3:
             print("Looped three times. Forced exit.")
             self.change_state(states.ExitState(self))
+            self.state.handle()  # Handle the exit state immediately
     
     def set_objects_detected(self, objects, labels):
         self._data["objects_detected"] = objects
