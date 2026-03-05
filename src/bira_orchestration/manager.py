@@ -1,3 +1,4 @@
+from copy import deepcopy
 from controller import BIRA_Controller
 import states
 from enums import (
@@ -34,7 +35,7 @@ class BIRA_Manager:
     def __init__(self):
         self.controller = BIRA_Controller()
         self.state = states.IdleState(self)
-        self._data = DEFAULT_CONTEXT.copy()
+        self._data = deepcopy(DEFAULT_CONTEXT)
         self.counter = 0
     
     def set_objects_detected(self, objects, labels):
@@ -63,7 +64,7 @@ class BIRA_Manager:
         self._data["execution_code"] = code
 
     def reset_data(self):
-        self._data = DEFAULT_CONTEXT.copy()
+        self._data = deepcopy(DEFAULT_CONTEXT)
     
     def get_data(self):
         return self._data
