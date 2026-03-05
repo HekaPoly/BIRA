@@ -1,6 +1,5 @@
 from enum import IntEnum
 
-
 class ListeningCode(IntEnum):
     """Codes for the listening stage.
 
@@ -69,3 +68,18 @@ class ExecutionCode(IntEnum):
     UNABLE_TO_MOVE = 2
     UNREACHABLE_OBJECT = 3
     OBJECT_DROPPED = 4
+
+
+class StateCode(IntEnum):
+    """Codes for the high-level dialogue/execution states.
+
+    These replace passing state classes around. The manager owns
+    the mapping StateCode -> concrete State subclass.
+    """
+
+    IDLE = 0
+    LISTENING = 1
+    VISION = 2
+    PLANNING = 3
+    EXECUTING = 4
+    EXIT = 5

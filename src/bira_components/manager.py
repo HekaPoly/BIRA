@@ -5,7 +5,13 @@
 # from bira_components.micro import Micro
 # from bira_components.speech_to_text import SpeechToText
 import bira_components.states as states
-from bira_components.codes import ListeningCode, VisionCode, PlanificationCode, ExecutionCode
+from bira_components.enums import (
+    ListeningCode,
+    VisionCode,
+    PlanificationCode,
+    ExecutionCode,
+    StateCode,
+)
 # from bira_components.text_to_speech import TextToSpeech
 # from bira_components.uart_transmitter import UARTTransmitter
 
@@ -21,6 +27,16 @@ DEFAULT_CONTEXT = {
             "execution_code": ExecutionCode.NO_RESPONSE,
         }
 
+
+STATE_CLASSES = {
+    StateCode.IDLE: states.IdleState,
+    StateCode.LISTENING: states.ListeningState,
+    StateCode.VISION: states.VisionState,
+    StateCode.PLANNING: states.PlanningState,
+    StateCode.EXECUTING: states.ExecutingState,
+    StateCode.EXIT: states.ExitState,
+}
+
 class BIRA_Manager:
     def __init__(self):
         # self.mediator = BiraMediator()
@@ -31,18 +47,10 @@ class BIRA_Manager:
         # self.text_to_speech = TextToSpeech(self.mediator)
         # self.speech_to_text = SpeechToText(self.mediator)
         # self.slm_manager = SLM_Manager(self.mediator)
-
+    # Initial state
         self.state = states.IdleState(self)
         self._data = DEFAULT_CONTEXT.copy()
         self.counter = 0
-    
-    def increment_counter(self):
-        self.counter += 1
-        print(f"Counter incremented to {self.counter}")
-        if self.counter > 3:
-            print("Looped three times. Forced exit.")
-            self.change_state(states.ExitState(self))
-            self.state.handle()  # Handle the exit state immediately
     
     def set_objects_detected(self, objects, labels):
         self._data["objects_detected"] = objects
@@ -74,10 +82,17 @@ class BIRA_Manager:
 
     def reset_data(self):
         self._data = DEFAULT_CONTEXT.copy()
-    
-    def change_state(self, new_state):
-        self.state = new_state
-        print(f"Entering {self.state}")
+
+    def change_state(self, next_code: StateCode):
+        if next_code < self.state.code:
+            print(f"Warning: Transitioning to a previous state ({next_code} < {self.state.code})")
+            self.counter += 1
+            if self.counter > 3:
+                print("Looped three times. Forced exit.")
+                next_code = StateCode.EXIT
+        state_cls = STATE_CLASSES[next_code]
+        self.state = state_cls(self)
+        print(f"\nEntering {self.state} (Code {self.state.code})")
 
     def run(self):
         while True:
