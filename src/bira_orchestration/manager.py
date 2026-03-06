@@ -1,6 +1,3 @@
-from copy import deepcopy
-from dataclasses import asdict
-
 from context import BIRA_Context
 from controller import BIRA_Controller
 import states
@@ -54,7 +51,19 @@ class BIRA_Manager:
         self._context.execution_code = code
 
     def reset_data(self):
-        self._context = BIRA_Context()
+        self._context.reset_all()
+
+    def prepare_listening(self):
+        self._context.reset_for_listening()
+
+    def prepare_vision(self):
+        self._context.reset_for_vision()
+
+    def prepare_planning(self):
+        self._context.reset_for_planning()
+
+    def prepare_execution(self):
+        self._context.reset_for_execution()
     
     def get_data(self):
         return self._context

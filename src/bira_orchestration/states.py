@@ -67,7 +67,7 @@ class ListeningState(State):
         return "ListeningState"
 
     def _prepare(self):
-        self.bira_manager.set_vision_code(VisionCode.NO_RESPONSE)
+        self.bira_manager.prepare_listening()
         
     def _handle(self):
         # TODO: Implement actual listening logic
@@ -111,8 +111,7 @@ class VisionState(State):
         return "VisionState"
     
     def _prepare(self):
-        self.bira_manager.set_objects_detected([], [])
-        self.bira_manager.set_vision_code(VisionCode.NO_RESPONSE)
+        self.bira_manager.prepare_vision()
 
     def _handle(self):
         # TODO: Implement actual vision logic
@@ -156,7 +155,7 @@ class PlanningState(State):
         return "PlanningState"
     
     def _prepare(self):
-        self.bira_manager.set_planification_code(PlanificationCode.NO_RESPONSE)
+        self.bira_manager.prepare_planning()
 
     def _handle(self):
         # TODO: Perform actions specific to Planning state
@@ -215,7 +214,7 @@ class ExecutingState(State):
         return "ExecutingState"
     
     def _prepare(self):
-        self.bira_manager.set_execution_code(ExecutionCode.NO_RESPONSE)
+        self.bira_manager.prepare_execution()
     
     def _handle(self):
         # Perform actions specific to Executing state
