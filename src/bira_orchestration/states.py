@@ -73,7 +73,7 @@ class ListeningState(State):
         # TODO: Implement actual listening logic
         transcription = self.bira_manager.controller.listen()
         self.bira_manager.add_user_input(transcription)
-        self.bira_manager.set_listening_code(ListeningCode.SUCCESS)
+        self.bira_manager.get_data().listening_code = ListeningCode.SUCCESS
 
     def _decide_next_state(self):
         listening_code = self.bira_manager.get_data().listening_code
@@ -116,8 +116,10 @@ class VisionState(State):
     def _handle(self):
         # TODO: Implement actual vision logic
         sl_object, detection_labels = self.bira_manager.controller.vision()
-        self.bira_manager.set_objects_detected(sl_object, detection_labels)
-        self.bira_manager.set_vision_code(VisionCode.SUCCESS)
+        context = self.bira_manager.get_data()
+        context.objects_detected = sl_object
+        context.detection_labels = detection_labels
+        context.vision_code = VisionCode.SUCCESS
     
     def _decide_next_state(self):
         vision_code = self.bira_manager.get_data().vision_code
@@ -163,8 +165,9 @@ class PlanningState(State):
         # If successful, set feedback and plan next actions
         response = self.bira_manager.controller.prompt_slm(self.bira_manager.get_data().objects_detected)
         self.bira_manager.add_feedback(response.feedback)
-        self.bira_manager.set_object_selected(response.object_selected)
-        self.bira_manager.set_planification_code(PlanificationCode.SUCCESS)
+        context = self.bira_manager.get_data()
+        context.object_selected = response.object_selected
+        context.planification_code = PlanificationCode.SUCCESS
 
     def _decide_next_state(self):
         planification_code = self.bira_manager.get_data().planification_code
@@ -221,7 +224,7 @@ class ExecutingState(State):
         # For example, send commands to actuators or perform a task based on the response generated in RespondingState
         
         self.bira_manager.controller.send_mechanical_command(self.bira_manager.get_data().object_selected)
-        self.bira_manager.set_execution_code(ExecutionCode.SUCCESS)
+        self.bira_manager.get_data().execution_code = ExecutionCode.SUCCESS
     
     def _decide_next_state(self):
         execution_code = self.bira_manager.get_data().execution_code

@@ -1,13 +1,7 @@
 from context import BIRA_Context
 from controller import BIRA_Controller
 import states
-from enums import (
-    ListeningCode,
-    VisionCode,
-    PlanificationCode,
-    ExecutionCode,
-    StateCode,
-)
+from enums import StateCode
 
 STATE_CLASSES = {
     StateCode.IDLE: states.IdleState,
@@ -25,31 +19,12 @@ class BIRA_Manager:
         self._context = BIRA_Context()
         self.counter = 0
     
-    def set_objects_detected(self, objects, labels):
-        self._context.objects_detected = objects
-        self._context.detection_labels = labels
-
     def add_user_input(self, user_input: str):
         self._context.user_inputs.append(user_input)
 
     def add_feedback(self, feedback):
         self._context.feedbacks.append(feedback)
     
-    def set_object_selected(self, obj):
-        self._context.object_selected = obj
-    
-    def set_listening_code(self, code: ListeningCode):
-        self._context.listening_code = code
-    
-    def set_vision_code(self, code: VisionCode):
-        self._context.vision_code = code
-    
-    def set_planification_code(self, code: PlanificationCode):
-        self._context.planification_code = code
-    
-    def set_execution_code(self, code: ExecutionCode):
-        self._context.execution_code = code
-
     def reset_data(self):
         self._context.reset_all()
 
