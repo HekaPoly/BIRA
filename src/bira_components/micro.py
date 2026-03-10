@@ -1,10 +1,8 @@
-from time import sleep
 import sounddevice as sd
 import numpy as np
 import wave
-import asyncio
 
-class Micro():
+class Micro:
     def __init__(self, frequency=44100, device=None):
         """
         Initialize the Micro object.
@@ -22,22 +20,55 @@ class Micro():
         self.audio_data = None
         self.stream = None
 
+    def get_volume(self):
+        """
+        Calculate and return the average volume of the recorded audio.
+        Returns:
+            None
+        """
+        if self.audio_data is None or len(self.audio_data) == 0:
+            return 0.0
+
+        # CASE 1 : streaming (list of chunks)
+        if isinstance(self.audio_data, list):
+            audio = np.concatenate(self.audio_data)
+        else:
+            audio = self.audio_data
+
+        audio = audio.astype(np.float32) / 32768.0
+        return float(np.sqrt(np.mean(audio ** 2)))
+
+    def wait_for_volume(self, threshold=0.2):
+        """
+        Loops until a certain volume is reached
+        Parameters:
+            threshold (float): Volume threshold to trigger the break (default: 0.2).
+        Returns:
+            None
+        """
+        self._start_recording()
+
+        while True:
+            sd.sleep(100)
+
+            if self.audio_data and len(self.audio_data) > 0:
+                last_chunk = self.audio_data[-1]
+                audio = last_chunk.astype(np.float32) / 32768.0
+                volume = np.sqrt(np.mean(audio ** 2))
+                print(f"Current volume: {volume:.3f}")
+                if volume >= threshold:
+                    print(f"Command detected with volume: {volume:.3f}")
+                    break
 
     def record(self):
         print('start transcription_request')
         self._record(duration=5)
         self._save_recording('recording.wav')
 
-    def sleep_mode(self):
-        self.wait_for_volume(threshold=0.2)
-
     def _start_recording(self):
         """
         Start recording audio from the selected device.
         Does nothing if a recording is already in progress.
-
-        Parameters:
-            None
 
         Returns:
             None
@@ -60,14 +91,14 @@ class Micro():
         self.is_recording = True
         print("Recording started")
 
-    def _get_stream(self, data, frames, time, status):
+    def _get_stream(self, data, _frames, _time, status):
         """
         Internal callback function used by sounddevice to collect audio data.
 
         Parameters:
             data (numpy.ndarray): Audio buffer received from the device.
-            frames (int): Number of frames in the buffer.
-            time (CData): Timing information from sounddevice.
+            _frames (int): Number of frames in the buffer.
+            _time (CData): Timing information from sounddevice.
             status (CallbackFlags): Stream status (e.g., underflow/overflow).
 
         Returns:
@@ -82,16 +113,13 @@ class Micro():
         Stop the current recording and finalize the audio data.
         Does nothing if no recording is active.
 
-        Parameters:
-            None
-
         Returns:
             None
         """
         if not self.is_recording:
             print("No recording in progress")
             return
-        
+
         if self.stream:
             self.stream.stop()
             self.stream.close()
@@ -128,50 +156,16 @@ class Micro():
         if self.audio_data is None:
             print("No recording to save")
             return
-        
+
         with wave.open(filename, "wb") as file:
             file.setnchannels(1)
             file.setsampwidth(2)
             file.setframerate(self.frequency)
             file.writeframes(self.audio_data.tobytes())
         print(f"File saved: {filename}")
-    
-
-    # TODO : remove unused method
-    def get_volume(self):
-        if self.audio_data is None or len(self.audio_data) == 0:
-            return 0.0
-
-        # Cas 1 : streaming (liste de chunks)
-        if isinstance(self.audio_data, list):
-            audio = np.concatenate(self.audio_data)
-        else:
-            audio = self.audio_data
-
-        audio = audio.astype(np.float32) / 32768.0
-        return float(np.sqrt(np.mean(audio ** 2)))
-
-
-    # TODO: remove unused method
-    def wait_for_volume(self, threshold=0.2):
-        self._start_recording()
-
-        while True:
-            sd.sleep(100)
-
-            if self.audio_data and len(self.audio_data) > 0:
-                last_chunk = self.audio_data[-1] 
-                audio = last_chunk.astype(np.float32) / 32768.0
-                volume = np.sqrt(np.mean(audio ** 2))
-                print(f"Current volume: {volume:.3f}")
-                if volume >= threshold:
-                    print(f"Command detected with volume: {volume:.3f}")
-                    break
-
 
 
 if __name__ == "__main__":
     my_micro = Micro(frequency=16000)
-    my_micro._record(duration=3)
-    my_micro._save_recording("recording.wav")
+    my_micro.record()
     print(f"Average volume: {my_micro.get_volume():.3f}")
