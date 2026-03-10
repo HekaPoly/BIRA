@@ -1,8 +1,6 @@
-import os
-
 from openai import OpenAI
 
-from bira_components.bira_component import BiraComponent
+from src.bira_components.bira_component import BiraComponent
 
 # Toggle: True = OpenAI Whisper API, False = local whisper model
 USE_OPENAI_API = True
@@ -31,16 +29,49 @@ class SpeechToText(BiraComponent):
         self.use_openai_api = use_openai_api if use_openai_api is not None else USE_OPENAI_API
         self._client = OpenAI(api_key=OPENAI_API_KEY) if (self.use_openai_api and OPENAI_API_KEY) else None
 
-    #TODO: remove used methods
-    def receive(self, message):
-        print("STT", message.keys())
-        if "transcribe_1" in message:
-            print("Received transcribe_1 request")
-            result = self.transcribe(message["transcribe_1"])
-            print("heres the result:", result)
-            self.mediator.send(self, {"transcription_ready": result})
+    def transcribe(self, audio_data="recording.wav"):
+        """
+        Transcribe an audio file to text using either the OpenAI Whisper API or a local Whisper model.
+
+        Args:
+            audio_data (str): Path to the audio file to transcribe. Defaults to "recording.wav".
+
+        Returns:
+            str: The transcribed text. If an error occurs during transcription, a fallback message
+                is returned instead.
+        """
+        print("Starting transcription...")
+        try:
+            result = self.transcribe_async(audio_data)
+            print(result)
+            return result
+        except Exception as e:
+            print("Error during transcription:", e)
+            return "I want to eat some strawberries"
+
 
     def transcribe_async(self, audio_path):
+        """
+        Perform the actual transcription of an audio file, using either the OpenAI Whisper API
+        or a local Whisper model depending on the instance configuration.
+
+        This method is called internally by :meth:`transcribe` and handles the low-level
+        transcription logic. When using the OpenAI API, it opens the audio file and sends it
+        to the ``whisper-1`` endpoint. When using the local model, it loads the model on first
+        use (lazy initialization) and runs inference on the given file.
+
+        Args:
+            audio_path (str): Path to the audio file to transcribe (e.g. ``"recording.wav"``).
+
+        Returns:
+            str: The transcribed text, stripped of leading/trailing whitespace.
+
+        Raises:
+            ValueError: If ``use_openai_api`` is ``True`` but no API key has been configured
+                (neither via :data:`OPENAI_API_KEY` nor the ``OPENAI_API_KEY`` environment variable).
+            FileNotFoundError: If the file at ``audio_path`` does not exist.
+        """
+
         print(f"Transcribing audio: {audio_path} in language: {self.language}")
         if self.use_openai_api:
             if not self._client:
@@ -59,15 +90,14 @@ class SpeechToText(BiraComponent):
         print("Stopped Transcription")
         return text
 
-    def transcribe(self, audio_data="recording.wav"):
-        print("Starting transcription...")
-        try:
-            result = self.transcribe_async(audio_data)
-            print(result)
-            return result
-        except Exception as e:
-            print("Error during transcription:", e)
-            return "Je veux manger des fraises"
+    #TODO: remove used method
+    def receive(self, message):
+        print("STT", message.keys())
+        if "transcribe_1" in message:
+            print("Received transcribe_1 request")
+            result = self.transcribe(message["transcribe_1"])
+            print("Here's the result:", result)
+            self.mediator.send(self, {"transcription_ready": result})
 
 
 if __name__ == "__main__":
