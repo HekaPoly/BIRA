@@ -47,12 +47,21 @@ class BIRA_Controller:
         return response
     
     def destroy(self):
-        # TODO: Implement actual destroy logic for each component to clean up resources properly.
-        self.camera.destroy()
-        self.computer_vision.destroy()
-        self.uart_transmitter.destroy()
-        self.micro.destroy()
-        self.text_to_speech.destroy()
-        self.speech_to_text.destroy()
-        self.slm_manager.destroy()
-    
+        components = [
+            self.camera,
+            self.computer_vision,
+            self.uart_transmitter,
+            self.micro,
+            self.text_to_speech,
+            self.speech_to_text,
+            self.slm_manager
+        ]
+
+        for component in components :
+            try:
+                if component and hasattr(component,'destroy'):
+                    component.destroy()
+            except Exception as e:
+                print(f"Failed to destroy {component} : {e}")
+
+
