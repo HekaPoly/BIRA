@@ -1,84 +1,76 @@
-
 from __future__ import annotations
+
+from pathlib import Path
 from typing import Optional
-import json
 import argparse
+import json
+import os
+import subprocess
+
 from cv_viewer import labels
 from ollama import Client
-import subprocess
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:
+    pass
+
+try:
+    from bira_components.tensorRT import TensorRTInferenceEngine
+except Exception:
+    TensorRTInferenceEngine = None
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _parse_first_json(text: str) -> dict:
-    """Parse the first complete JSON object from a string. Handles extra text or multiple JSON blobs."""
+    """Parse the first complete JSON object from a string."""
     text = text.strip()
     start = text.find("{")
     if start == -1:
         raise json.JSONDecodeError("No JSON object found", text, 0)
+
     depth = 0
     in_string = False
     escape = False
     quote = None
-    for i in range(start, len(text)):
-        c = text[i]
+
+    for index in range(start, len(text)):
+        char = text[index]
         if escape:
             escape = False
             continue
-        if c == "\\" and in_string:
+        if char == "\\" and in_string:
             escape = True
             continue
         if in_string:
-            if c == quote:
+            if char == quote:
                 in_string = False
             continue
-        if c in ('"', "'"):
+        if char in {'"', "'"}:
             in_string = True
-            quote = c
+            quote = char
             continue
-        if c == "{":
+        if char == "{":
             depth += 1
-        elif c == "}":
+        elif char == "}":
             depth -= 1
             if depth == 0:
-                return json.loads(text[start : i + 1])
+                return json.loads(text[start : index + 1])
+
     raise json.JSONDecodeError("Unbalanced braces", text, start)
 
 
-# SYSTEM_BIRA = """
-# Tu es BIRA, un assistant amical, enthousiaste et utile destiné à interpréter des commandes de préhension d’objets. 
-# Tu dois toujours répondre EXCLUSIVEMENT en JSON valide.
-
-# RÈGLES FONDAMENTALES :
-
-# 3. response :
-#    - Fournir une phrase de confirmation en première personne, avec un ton amical et enthousiaste.
-#    - Reformuler l’action de manière active en incluant l’objet identifié.
-#    - Ne jamais reprendre textuellement la commande de l’utilisateur.
-#    - Exemples :
-#        "D’accord, je saisis [objet]."
-#        "Compris, j’attrape [objet] pour toi."
-
-#    - Si la commande est trop vague (objet imprécis, terme flou), demander des clarifications avec enthousiasme.
-#    - Si la demande concerne un groupe d’objets (ex. "les affaires", "les trucs"), demander des précisions.
-#    - Si les objets mentionnés ne sont pas être détectés ou ne semblent pas présents, demander des clarifications.
-#    - Exemples :
-#        "Je suis ravi de t’aider ! Peux-tu préciser de quel objet il s’agit ?"
-#        "Je suis ravi de t’aider, mais je ne parviens pas à repérer l’objet. Peux-tu me le décrire davantage ?"
-
-       
-# FORMAT DE SORTIE :
-# Toujours renvoyer un JSON strictement valide, même si certains champs sont null ou vides.
-
-# IL EST IMPERATIF DE SUIVRE STRICTEMENT LA STRUCTURE CI-DESSOUS, SOIT SUR QUE LE MODE EST PRESENT (GENRE IL FAUT VRAIMENT QUE LE MODE SOIT PRESENT SINON LE CODE PLANTE):
-# Structure :
-# {
-#   "response": "...",
-#   "mode": "confirmation" | "clarification" | "stop",
-# }
-# """
-
 SYSTEM_BIRA = """
 You are BIRA, a friendly, enthusiastic, and helpful assistant designed to interpret object-grasping commands.
-The user will give instructions and your task is to find which action to do based on the detected objects. 
+The user will give instructions and your task is to find which action to do based on the detected objects.
 If the object is not detected, you must ask for clarification.
 You must ALWAYS respond EXCLUSIVELY in valid JSON.
 
@@ -88,22 +80,22 @@ Response:
    - Provide a confirmation sentence in the first person, with a friendly and enthusiastic tone.
    - Rephrase the action in an active way, including the identified object.
    - Examples:
-       "Alright, I’m [ACTION] the [OBJECT]."
-       "Got it, I’ll [ACTION] the [OBJECT] for you."
+       "Alright, I'm [ACTION] the [OBJECT]."
+       "Got it, I'll [ACTION] the [OBJECT] for you."
 
    - If the command is too vague (imprecise object, unclear term, unclear action), ask for clarification enthusiastically.
    - If the request refers to a group of objects (e.g., "the stuff", "the things"), ask for clarification.
    - If the mentioned objects cannot be detected or do not seem to be present, ask for clarification.
-   - If the user whan to eat a specific [OBJECT], you must confirm by responding that you will bring the food [OBJECT]
+   - If the user wants to eat a specific [OBJECT], you must confirm by responding that you will bring the food [OBJECT].
    - Examples:
-       "I’m happy to help, but I do not see [OBJECT]. Could you specify which one you mean?"
-       "I’m happy to help, but I can’t seem to identify the [OBJECT]. Could you describe it a bit more?"
-       "I’m happy to help, but I can’t seem to identify the object. Could you describe it a bit more?"
+       "I'm happy to help, but I do not see [OBJECT]. Could you specify which one you mean?"
+       "I'm happy to help, but I can't seem to identify the [OBJECT]. Could you describe it a bit more?"
+       "I'm happy to help, but I can't seem to identify the object. Could you describe it a bit more?"
 
 OUTPUT FORMAT:
 Always return strictly valid JSON, even if some fields are null or empty.
 
-IT IS IMPERATIVE TO STRICTLY FOLLOW THE STRUCTURE BELOW, MAKE SURE THAT THE MODE IS PRESENT
+IT IS IMPERATIVE TO STRICTLY FOLLOW THE STRUCTURE BELOW AND MAKE SURE THE MODE IS PRESENT.
 Structure:
 [{
   "response": "...",
@@ -111,15 +103,18 @@ Structure:
 },]
 """
 
-class SLM_Manager:
 
+class SLM_Manager:
     def __init__(
         self,
-        model_name: str = "qwen3:1.7b",                       
+        model_name: str = "qwen3:1.7b",
         max_new_tokens: int = 500,
         temperature: float = 0.3,
         mode: str = "local",
         api_key: Optional[str] = None,
+        prefer_tensorrt: Optional[bool] = None,
+        tensorrt_engine_dir: Optional[str] = None,
+        tensorrt_fallback_to_ollama: Optional[bool] = None,
     ):
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
@@ -129,18 +124,64 @@ class SLM_Manager:
         self.detections = None
         self.transcription = None
         self.prompt = None
-        
+        self.prefer_tensorrt = (
+            _env_flag("USE_TENSORRT")
+            if prefer_tensorrt is None
+            else prefer_tensorrt
+        )
+        self.tensorrt_fallback_to_ollama = (
+            _env_flag("TENSORRT_FALLBACK_TO_OLLAMA", default=True)
+            if tensorrt_fallback_to_ollama is None
+            else tensorrt_fallback_to_ollama
+        )
+        default_engine_dir = Path(__file__).resolve().parent / "tensorRT" / "tensorrt_models" / "engines"
+        self.tensorrt_engine_dir = Path(tensorrt_engine_dir or default_engine_dir)
+        self.trt_engine: Optional[TensorRTInferenceEngine] = None
+        self.trt_ready = False
+
         if mode == "cloud":
             if not api_key:
                 raise ValueError("API key must be provided for cloud mode.")
-            
+
             self.client = Client(
                 host="https://ollama.com",
-                headers={'Authorization': f'Bearer {api_key}'}
+                headers={"Authorization": f"Bearer {api_key}"},
             )
-            
         else:
             self.client = Client(host="http://localhost:11434")
+
+        if self.mode != "local" and self.prefer_tensorrt:
+            print("TensorRT is only available in local mode. Falling back to Ollama.")
+            self.prefer_tensorrt = False
+
+        if self.prefer_tensorrt:
+            if TensorRTInferenceEngine is None:
+                print("TensorRT support is unavailable. Falling back to Ollama.")
+                self.prefer_tensorrt = False
+            else:
+                self._init_tensorrt_engine()
+
+    def _init_tensorrt_engine(self) -> None:
+        try:
+            self.trt_engine = TensorRTInferenceEngine(engine_dir=str(self.tensorrt_engine_dir))
+            self.trt_ready = bool(self.trt_engine.load_engine())
+
+            if self.trt_ready:
+                print(f"TensorRT ready (engine: {self.tensorrt_engine_dir})")
+                return
+
+            self.trt_engine = None
+            if not self.tensorrt_fallback_to_ollama:
+                raise RuntimeError(f"No TensorRT engine available in {self.tensorrt_engine_dir}")
+
+            print(f"TensorRT engine not ready in {self.tensorrt_engine_dir}. Falling back to Ollama.")
+        except Exception as exc:
+            self.trt_ready = False
+            self.trt_engine = None
+            if not self.tensorrt_fallback_to_ollama:
+                raise RuntimeError(f"TensorRT initialization failed: {exc}") from exc
+            print(f"TensorRT unavailable ({exc}). Falling back to Ollama.")
+
     def reset_conversation(self) -> None:
         self.history = [{"role": "system", "content": SYSTEM_BIRA}]
         self.detections = None
@@ -150,11 +191,15 @@ class SLM_Manager:
     def set_transcription(self, transcription: str) -> None:
         self.transcription = transcription
 
-    def set_detections(self, detection_labels: Optional[list[int]] = None, detected_objects: Optional[list] = None) -> None:
+    def set_detections(
+        self,
+        detection_labels: Optional[list[int]] = None,
+        detected_objects: Optional[list] = None,
+    ) -> None:
         resolved: list[str] = []
 
         if detection_labels:
-            resolved.extend(labels.labelDict[lid] for lid in detection_labels if lid in labels.labelDict)
+            resolved.extend(labels.labelDict[label_id] for label_id in detection_labels if label_id in labels.labelDict)
 
         if detected_objects:
             for obj in detected_objects:
@@ -165,7 +210,6 @@ class SLM_Manager:
                 if key in labels.labelDict:
                     resolved.append(labels.labelDict[key])
 
-        # Keep order while removing duplicates
         self.detections = list(dict.fromkeys(resolved)) if resolved else None
 
     def _build_prompt(self, transcription: str, detections: list[str]) -> str:
@@ -210,169 +254,180 @@ class SLM_Manager:
             print("SLM JSON parse error:", err)
             response = {"response": "I didn't understand. Could you repeat?", "mode": "clarification"}
 
-        if response["mode"] in {"stop"}:
+        if response["mode"] == "stop":
             self.reset_conversation()
 
         return response
 
-                
-
-    # ------------------------------------------------------------------
     def load_model(self):
-        """
-        Vérifie qu’Ollama tourne, puis lance le modèle avec subprocess
-        pour le 'réveiller', puis crée le client Python.
-        """
-        
+        if self.prefer_tensorrt:
+            if self.trt_ready and not self.tensorrt_fallback_to_ollama:
+                print("TensorRT is ready. Skipping Ollama startup.")
+                return
+
+            if not self.trt_ready and not self.tensorrt_fallback_to_ollama:
+                raise RuntimeError(
+                    "TensorRT was requested but no runnable engine is available. "
+                    f"Expected assets in {self.tensorrt_engine_dir}."
+                )
+
         if self.mode == "cloud":
-            print(f"Vérification du modèle '{self.model_name}' via Ollama Cloud...")
+            print(f"Checking model '{self.model_name}' through Ollama Cloud...")
             try:
                 _ = self.client.generate(
                     model=self.model_name,
                     prompt="ping",
-                    options={"num_predict": 5}
+                    options={"num_predict": 5},
                 )
-            except Exception as e:
+            except Exception as exc:
                 raise RuntimeError(
-                    "Impossible de contacter Ollama Cloud. "
-                    "Vérifie ta clé API et le nom du modèle."
-                ) from e
+                    "Unable to contact Ollama Cloud. Check the API key and the model name."
+                ) from exc
 
-            print("Modèle accessible via l'API Cloud.")
-            print("Client Python prêt.")
+            print("Cloud model is reachable.")
+            print("Python client ready.")
             return
-        
 
-        # 1. Vérifier que Ollama tourne
-        print("Vérification du serveur Ollama local...")
+        print("Checking local Ollama server...")
         try:
             subprocess.run(
                 ["ollama", "list"],
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
-        except Exception as e:
-            raise RuntimeError("Ollama n'est pas lancé. Lance 'ollama serve'.") from e
+        except Exception as exc:
+            raise RuntimeError("Ollama is not running. Start it with 'ollama serve'.") from exc
 
-        # 2. Vérifier que le modèle existe
         models = subprocess.run(
             ["ollama", "list"],
             capture_output=True,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         ).stdout
 
         if self.model_name not in models:
             raise RuntimeError(
-                f"Le modèle {self.model_name} n'existe pas dans Ollama.\n"
-                f"Crée-le avec : ollama create {self.model_name} -f Modelfile"
+                f"The model {self.model_name} does not exist in Ollama.\n"
+                f"Create it with: ollama create {self.model_name} -f Modelfile"
             )
 
-        # 3. Réveiller le modèle (ta demande !)
-        print(f"Lancement du modèle {self.model_name}...")
+        print(f"Starting model {self.model_name}...")
         subprocess.run(
             ["ollama", "run", self.model_name],
             capture_output=True,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
-        print("Modèle réveillé !")
+        print("Model is awake.")
 
-        # 4. Initialiser / revalider le client Python local
         self.client = Client(host="http://localhost:11434")
+        print("Python client ready.")
 
-        print("Client Python prêt.")
-
-    # ------------------------------------------------------------------
     def generate_response(self, prompt: str) -> str:
-        """
-        Envoie un prompt au modèle Ollama et récupère la réponse textuelle complète.
+        self.history.append({"role": "user", "content": prompt})
 
-        Parameters
-        ----------
-        prompt : str
-            Instruction ou question à traiter.
+        if self.prefer_tensorrt and self.trt_ready and self.trt_engine:
+            try:
+                response = self.trt_engine.chat(
+                    messages=self.history,
+                    max_new_tokens=self.max_new_tokens,
+                    temperature=self.temperature,
+                )
+                content = response.get("message", {}).get("content", "")
+                if content:
+                    return content
 
-        Returns
-        -------
-        str
-            Sortie textuelle complète produite par le modèle.
-        """
-        self.history.append(
-            {"role": "user", "content": prompt}
-        )
+                if not self.tensorrt_fallback_to_ollama:
+                    raise RuntimeError("TensorRT returned an empty response.")
+            except Exception as exc:
+                print(f"TensorRT failed ({exc}).")
+                if not self.tensorrt_fallback_to_ollama:
+                    raise
+
         response = self.client.chat(
             model=self.model_name,
             messages=self.history,
-                options={
-                    "temperature": self.temperature,
-                    "num_predict": self.max_new_tokens,
-                    "format": "json",
-                }
+            options={
+                "temperature": self.temperature,
+                "num_predict": self.max_new_tokens,
+                "format": "json",
+            },
         )
-                 
         return response["message"]["content"]
 
 
-
-
-# --------------------------------------------------------------------------------------
-#  Exécution directe du script
-# --------------------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test SLM_Manager inference locally")
     parser.add_argument("--model", dest="BIRA", default="qwen3:1.7b", help="Model name to use")
     parser.add_argument("--mode", default="local", choices=["local", "cloud"], help="Deployment mode")
     parser.add_argument("--api-key", default="", help="API key for cloud mode")
-    
+    parser.add_argument(
+        "--prefer-tensorrt",
+        action="store_true",
+        help="Use the TensorRT backend when a runnable engine is configured.",
+    )
+    parser.add_argument(
+        "--tensorrt-engine-dir",
+        default=None,
+        help="Path to the TensorRT engine directory.",
+    )
+
     args = parser.parse_args()
 
-    # Initialize
     print(f"Initializing SLM_Manager (mode: {args.mode}, model: {args.BIRA})")
-    mgr = SLM_Manager(model_name=args.BIRA, mode=args.mode, api_key=args.api_key if args.api_key else None)
-    
+    manager = SLM_Manager(
+        model_name=args.BIRA,
+        mode=args.mode,
+        api_key=args.api_key if args.api_key else None,
+        prefer_tensorrt=args.prefer_tensorrt,
+        tensorrt_engine_dir=args.tensorrt_engine_dir,
+    )
+
     try:
-        mgr.load_model()
-    except Exception as e:
-        print(f"Warning: Model load failed: {e}")
+        manager.load_model()
+    except Exception as exc:
+        print(f"Warning: model load failed: {exc}")
         print("Falling back to assuming the client is reachable...")
-        
+
     print("\n--- Interactive SLM Test ---")
     print("Type 'q' or 'quit' to exit.")
-    
+
     while True:
         try:
             transcription = input("\nEnter user command (transcription): ").strip()
             if transcription.lower() in ["q", "quit"]:
                 break
-                
-            detections_input = input("Enter detected objects (comma-separated labels, e.g. '0, 41, 39' for person, cup, bottle): ").strip()
+
+            detections_input = input(
+                "Enter detected objects (comma-separated labels, e.g. '0, 41, 39' for person, cup, bottle): "
+            ).strip()
             if detections_input.lower() in ["q", "quit"]:
                 break
-                
-            # Parse detections (dummy mapping of YOLO COCO classes)
+
             detection_labels = []
             if detections_input:
                 try:
-                    detection_labels = [int(x.strip()) for x in detections_input.split(",") if x.strip()]
+                    detection_labels = [int(value.strip()) for value in detections_input.split(",") if value.strip()]
                 except ValueError:
-                    print("Error: Detected objects must be integers.")
+                    print("Error: detected objects must be integers.")
                     continue
-            
-            # Setup State
-            mgr.set_transcription(transcription)
-            mgr.set_detections(detection_labels=detection_labels)
-            
-            # Run Inference
+
+            manager.set_transcription(transcription)
+            manager.set_detections(detection_labels=detection_labels)
+
             print("\n[Running inference...]")
-            result = mgr.run_inference()
-            
-            # Display Result
+            result = manager.run_inference()
+
             print("\n--- Result ---")
             print(f"Response: {result.get('response')}")
             print(f"Mode:     {result.get('mode')}")
             print("-------------")
-            
         except KeyboardInterrupt:
             break
-            
+
     print("\nExiting SLM test.")
