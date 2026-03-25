@@ -160,8 +160,10 @@ class ComputerVision():
         
     
 if __name__ == "__main__":
+    models_dir = Path(__file__).resolve().parents[2] / "models"
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='../models/yolov8n.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', type=str, default=str(models_dir / 'yolov8n.pt'), help='model.pt path(s)')
     parser.add_argument('--svo', type=str, default=None, help='optional svo file')
     parser.add_argument('--img_size', type=int, default=416, help='inference size (pixels)')
     parser.add_argument('--conf_thres', type=float, default=0.4, help='object confidence threshold')

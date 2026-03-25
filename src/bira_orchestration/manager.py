@@ -1,21 +1,21 @@
-from .context import BIRA_Context
-from .controller import BIRA_Controller
-from bira_orchestration import states
+from bira_orchestration.context import BIRA_Context
+from bira_orchestration.controller import BIRA_Controller
+from bira_orchestration.states import IdleState, ListeningState, VisionState, PlanningState, ExecutingState, ExitState
 from bira_orchestration.enums import StateCode
 
 STATE_CLASSES = {
-    StateCode.IDLE: states.IdleState,
-    StateCode.LISTENING: states.ListeningState,
-    StateCode.VISION: states.VisionState,
-    StateCode.PLANNING: states.PlanningState,
-    StateCode.EXECUTING: states.ExecutingState,
-    StateCode.EXIT: states.ExitState,
+    StateCode.IDLE: IdleState,
+    StateCode.LISTENING: ListeningState,
+    StateCode.VISION: VisionState,
+    StateCode.PLANNING: PlanningState,
+    StateCode.EXECUTING: ExecutingState,
+    StateCode.EXIT: ExitState,
 }
 
 class BIRA_Manager:
     def __init__(self):
         self.controller = BIRA_Controller()
-        self.state = states.IdleState(self)
+        self.state = IdleState(self)
         self._context = BIRA_Context()
         self.counter = 0
     

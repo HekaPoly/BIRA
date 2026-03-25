@@ -7,8 +7,6 @@ from serial import Serial
 from serial.tools import list_ports
 from time import sleep
 
-from .bira_component import BiraComponent
-
 
 class UARTTransmitter():
     def __init__(self, 
