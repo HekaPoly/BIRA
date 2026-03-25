@@ -1,9 +1,7 @@
-from openai import OpenAI
-
-from src.bira_components.bira_component import BiraComponent
+# from openai import OpenAI
 
 # Toggle: True = OpenAI Whisper API, False = local whisper model
-USE_OPENAI_API = True
+USE_OPENAI_API = False
 
 # API key (only used when USE_OPENAI_API is True)
 OPENAI_API_KEY = None  # or set directly: OPENAI_API_KEY = "sk-..."
@@ -22,9 +20,9 @@ def _get_local_model():
     return _local_model
 
 
-class SpeechToText(BiraComponent):
+class SpeechToText():
     def __init__(self, language="en", mediator=None, use_openai_api=None):
-        super().__init__("speech_to_text", mediator)
+
         self.language = language
         self.use_openai_api = use_openai_api if use_openai_api is not None else USE_OPENAI_API
         self._client = OpenAI(api_key=OPENAI_API_KEY) if (self.use_openai_api and OPENAI_API_KEY) else None
@@ -90,14 +88,14 @@ class SpeechToText(BiraComponent):
         print("Stopped Transcription")
         return text
 
-    #TODO: remove used method
-    def receive(self, message):
-        print("STT", message.keys())
-        if "transcribe_1" in message:
-            print("Received transcribe_1 request")
-            result = self.transcribe(message["transcribe_1"])
-            print("Here's the result:", result)
-            self.mediator.send(self, {"transcription_ready": result})
+    # #TODO: remove used method
+    # def receive(self, message):
+    #     print("STT", message.keys())
+    #     if "transcribe_1" in message:
+    #         print("Received transcribe_1 request")
+    #         result = self.transcribe(message["transcribe_1"])
+    #         print("Here's the result:", result)
+    #         self.mediator.send(self, {"transcription_ready": result})
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ class BIRA_Controller:
         # TODO: Decouple components from mediator. We want to get rid of the mediator and have the controller directly manage the components.
         self.camera = Camera()
         self.computer_vision = ComputerVision(camera=self.camera) # TODO: We should not pass the camera to the computer vision. We should have a better way to share data between components. Maybe we can have a shared memory or a shared database where the camera can write the frames and the computer vision can read them.
-        self.uart_transmitter = UARTTransmitter()
+        # self.uart_transmitter = UARTTransmitter()
         self.micro = Micro()
         self.text_to_speech = TextToSpeech()
         self.speech_to_text = SpeechToText()
@@ -51,7 +51,7 @@ class BIRA_Controller:
         components = [
             self.camera,
             self.computer_vision,
-            self.uart_transmitter,
+            # self.uart_transmitter,
             self.micro,
             self.text_to_speech,
             self.speech_to_text,
