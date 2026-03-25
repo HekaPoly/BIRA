@@ -1,7 +1,7 @@
-from context import BIRA_Context
-from controller import BIRA_Controller
-import states
-from enums import StateCode
+from .context import BIRA_Context
+from .controller import BIRA_Controller
+from bira_orchestration import states
+from bira_orchestration.enums import StateCode
 
 STATE_CLASSES = {
     StateCode.IDLE: states.IdleState,

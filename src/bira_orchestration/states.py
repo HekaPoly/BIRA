@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 
-from enums import (
+from bira_orchestration.enums import (
     ListeningCode,
     VisionCode,
     PlanificationCode,
@@ -135,7 +135,7 @@ class VisionState(State):
                 new_state = StateCode.EXIT
             case VisionCode.SUCCESS:
                 print("Vision processing successful.")
-                feedback = f"J'ai détecté les objets suivants: {', '.join(self.bira_manager.get_data().detection_labels)}."
+                feedback = f"J'ai détecté les objets suivants: {', '.join(str(self.bira_manager.get_data().detection_labels))}."
                 new_state = StateCode.PLANNING
             case VisionCode.NO_OBJECT_DETECTED:
                 print("No objects detected.")
@@ -164,9 +164,13 @@ class PlanningState(State):
         # For example, analyze data from VisionState and make decisions
         # If successful, set feedback and plan next actions
         response = self.bira_manager.controller.prompt_slm(self.bira_manager.get_data().objects_detected)
-        self.bira_manager.add_feedback(response.feedback)
+        # self.bira_manager.add_feedback(response.feedback)
+        self.bira_manager.add_feedback(response)
+        
         context = self.bira_manager.get_data()
-        context.object_selected = response.object_selected
+        # context.object_selected = response.object_selected
+        context.object_selected = self.bira_manager.get_data().objects_detected[0]
+        print(context.object_selected)
         context.planification_code = PlanificationCode.SUCCESS
 
     def _decide_next_state(self):

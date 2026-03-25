@@ -1,6 +1,6 @@
 import argparse
 
-from bira_components.manager import BIRA_Manager
+from bira_orchestration.manager import BIRA_Manager
 # from bira_components.mediator import BiraMediator   
 # from bira_components.camera import Camera
 # from bira_components.computer_vision import ComputerVision

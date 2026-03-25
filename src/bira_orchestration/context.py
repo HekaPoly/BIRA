@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 
-from enums import ListeningCode, VisionCode, PlanificationCode, ExecutionCode
+from .enums import ListeningCode, VisionCode, PlanificationCode, ExecutionCode
 
 # Object context is managed by the BIRA_CONTROLLER, response codes are managed by states.
 @dataclass

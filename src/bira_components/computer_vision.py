@@ -7,8 +7,8 @@ from ultralytics import YOLO
 import cv2
 import argparse
 
-from camera import Camera
-import history as rd
+from bira_components.camera import Camera
+from bira_components import history as rd
 
 
 class ComputerVision():
@@ -145,7 +145,6 @@ class ComputerVision():
         """
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
-
         img = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
         detections = self.yolo.predict(img, save=False, imgsz=self.__opt.img_size, conf=self.__opt.conf_thres,
                         iou=iou_thres)[0].cpu().numpy().boxes
