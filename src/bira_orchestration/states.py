@@ -117,7 +117,7 @@ class VisionState(State):
         # TODO: Implement actual vision logic
         sl_object, detection_labels = self.bira_manager.controller.vision()
         context = self.bira_manager.get_data()
-        context.objects_detected = sl_object
+        context.objects_detected = sl_object.object_list
         context.detection_labels = detection_labels
         context.vision_code = VisionCode.SUCCESS
     

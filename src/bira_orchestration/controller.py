@@ -31,23 +31,22 @@ class BIRA_Controller:
     
     def vision(self):
         self.camera.open()
-        frames = []
+        
         with self.camera:
-            for i in range(3):
-                if self.camera.grab():
-                    print("Frame ", i)
-                    frames.append(self.camera.get_frame())
+            if self.camera.grab():
+                frame = self.camera.get_frame()
+                if frame is not None:
+                    sl_object, detection_labels = self.computer_vision.detect_objects(frame)
+                else:
+                    print("No frame")
+                    self.camera.close()
+                    return
+            else:
+                print("No camera")
+                self.camera.close()
+                return
         
         self.camera.close()
-        # frame = self.camera.get_frame() # TODO: We need 3 frames.
-        # print("frame: ", frame)
-        sl_object, detection_labels = self.computer_vision.detect_objects(frames[0])
-        print("sl_object", sl_object.object_list)
-        print("detection_labels", detection_labels)
-        
-        # Mock sl_object.object_list
-        sl_object = [{'human': 0}]
-        
         return sl_object, detection_labels
     
     def send_mechanical_command(self, command):
