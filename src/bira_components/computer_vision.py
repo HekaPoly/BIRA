@@ -1,25 +1,42 @@
 import asyncio
+from types import SimpleNamespace
+from pathlib import Path
 import numpy as np
 import pyzed.sl as sl
 from ultralytics import YOLO
 import cv2
-import time
 import argparse
 
 from .camera import Camera
 from . import history as rd
-from .bira_component import BiraComponent
 
 
-class ComputerVision(BiraComponent):
+class ComputerVision():
 
-    def __init__(self, opt = None, mediator=None):
-        super().__init__("computer_vision", mediator)
+    @staticmethod
+    def _default_opt():
+        models_dir = Path(__file__).resolve().parents[2] / "models"
+        return SimpleNamespace(
+            weights=str(models_dir / "yolov8n.pt"),
+            img_size=416,
+            conf_thres=0.4,
+        )
+
+    def __init__(self, opt = None, camera=None):
         self.__detections = None
-        self.__opt = opt
+        default_opt = self._default_opt()
+        if opt is None:
+            self.__opt = default_opt
+        else:
+            self.__opt = SimpleNamespace(
+                weights=getattr(opt, "weights", default_opt.weights),
+                img_size=getattr(opt, "img_size", default_opt.img_size),
+                conf_thres=getattr(opt, "conf_thres", default_opt.conf_thres),
+            )
+        self.__camera = camera
 
         print("Intializing Network(YOLO)...")
-        self.yolo = YOLO(opt.weights)
+        self.yolo = YOLO(self.__opt.weights)
         self.yolo.model.to('cuda')
         self.yolo.model.eval()
         self._lock = asyncio.Lock()
@@ -135,8 +152,8 @@ class ComputerVision(BiraComponent):
         self.__detections = self.__detections_to_custom_box(detections)
         
         # -- Ingest detections
-        Camera(self.mediator).get_camera().ingest_custom_box_objects(self.__detections)
-        Camera(self.mediator).get_camera().retrieve_objects(objects, obj_runtime_param)
+        self.__camera.get_camera().ingest_custom_box_objects(self.__detections)
+        self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
         
         object_list = objects.object_list
         rd.write_history(object_list)
@@ -152,10 +169,10 @@ if __name__ == "__main__":
 
     opt = parser.parse_args()
 
-    cv = ComputerVision(opt)
-
     cam = Camera()
     cam.open()
+
+    cv = ComputerVision(opt=opt, camera=cam)
 
     with cam:
         while True:

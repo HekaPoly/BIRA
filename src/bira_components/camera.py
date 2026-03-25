@@ -4,7 +4,7 @@ import cv2
 
 from .bira_component import BiraComponent
 
-class Camera(BiraComponent):
+class Camera():
     __lock = Lock()
     __instance =  None
 
@@ -17,8 +17,7 @@ class Camera(BiraComponent):
 
         return Camera.__instance
     
-    def __init__(self, mediator=None):
-        super().__init__("camera", mediator)
+    def __init__(self):
         if self.isInitialised is False:
             with Camera.__lock:
                 if self.isInitialised is False:
@@ -28,18 +27,18 @@ class Camera(BiraComponent):
                     self.__image = sl.Mat()
                     self.isInitialised = True
     
-    def receive(self, message):
-        if message.keys().__contains__('initialize_components'):
-            self.open()
-        elif message.keys().__contains__('close_camera'):
-            self.close()
-        elif message.keys().__contains__('detect_objects_request'):
-            print('start detect_objects_request')
-            if self.grab() == sl.ERROR_CODE.SUCCESS:
-                frame = self.get_frame()
-                self.mediator.send_to(self, "computer_vision", {"detect_objects_1": frame})
-            else:
-                self.mediator.send_to(self, "computer_vision", {"detect_objects_1": None})
+    # def receive(self, message):
+    #     if message.keys().__contains__('initialize_components'):
+    #         self.open()
+    #     elif message.keys().__contains__('close_camera'):
+    #         self.close()
+    #     elif message.keys().__contains__('detect_objects_request'):
+    #         print('start detect_objects_request')
+    #         if self.grab() == sl.ERROR_CODE.SUCCESS:
+    #             frame = self.get_frame()
+    #             self.mediator.send_to(self, "computer_vision", {"detect_objects_1": frame})
+    #         else:
+    #             self.mediator.send_to(self, "computer_vision", {"detect_objects_1": None})
 
 
     def get_camera(self):
