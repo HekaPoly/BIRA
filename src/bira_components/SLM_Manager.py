@@ -7,8 +7,6 @@ from cv_viewer import labels
 from ollama import Client
 import subprocess
 
-from bira_components.bira_component import BiraComponent
-
 
 def _parse_first_json(text: str) -> dict:
     """Parse the first complete JSON object from a string. Handles extra text or multiple JSON blobs."""
@@ -113,18 +111,16 @@ Structure:
 },]
 """
 
-class SLM_Manager(BiraComponent):
+class SLM_Manager:
 
     def __init__(
         self,
-        model_name: str = "gpt-oss:120b",                       
+        model_name: str = "qwen3:1.7b",                       
         max_new_tokens: int = 500,
         temperature: float = 0.3,
-        mode: str = "cloud",
-        api_key: str = "",
-        mediator = None,
+        mode: str = "local",
+        api_key: Optional[str] = None,
     ):
-        super().__init__("SLM_Manager", mediator=mediator)
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
@@ -135,7 +131,7 @@ class SLM_Manager(BiraComponent):
         self.prompt = None
         
         if mode == "cloud":
-            if api_key is None:
+            if not api_key:
                 raise ValueError("API key must be provided for cloud mode.")
             
             self.client = Client(
@@ -145,96 +141,79 @@ class SLM_Manager(BiraComponent):
             
         else:
             self.client = Client(host="http://localhost:11434")
-            
-    def receive(self, message):
-        print("SLM_Manager received message:", message)
-        if message.keys().__contains__('start'):
-            self.load_model()
-            
-        elif message.keys().__contains__('wake_up'):
-            self.history = [
-                {"role": "system", "content": SYSTEM_BIRA}
-            ]
-            self.detections = None
-            self.transcription = None
-            self.prompt = None
-            
-        elif message.keys().__contains__('detect_objects_ready'):
-            print("SLM detect_objects_ready")
-            # Prefer YOLO labels from computer_vision; fallback to ZED object_list (often empty after retrieve_objects)
-            if self.detections is None:
-                if message.get("detection_labels") is not None:
-                    self.detections = [labels.labelDict[lid] for lid in message["detection_labels"] if lid in labels.labelDict]
-                else:
-                    self.detections = [labels.labelDict[int(obj.raw_label)] for obj in message['detect_objects_ready'].object_list]
-            else:
-                # Merge new detections with existing ones
-                new_detections = []
-                if message.get("detection_labels") is not None:
-                    new_detections = [labels.labelDict[lid] for lid in message["detection_labels"] if lid in labels.labelDict]
-                else:
-                    new_detections = [labels.labelDict[int(obj.raw_label)] for obj in message['detect_objects_ready'].object_list]
-                
-                for det in new_detections:
-                    if det not in self.detections:
-                        self.detections.append(det)
-            print("SLM Detections: ", self.detections)
-             
-            
-        elif message.keys().__contains__('transcription_ready'):
-            print("SLM transcription_ready")
+    def reset_conversation(self) -> None:
+        self.history = [{"role": "system", "content": SYSTEM_BIRA}]
+        self.detections = None
+        self.transcription = None
+        self.prompt = None
 
-            self.transcription = message['transcription_ready']
-            
-        elif message.keys().__contains__('generate_response'):
-            print("SLM generate_response")
-            print("Input :", self.transcription, self.detections)
-            transcription = getattr(self, "transcription", None)
-            detections = getattr(self, "detections", None)
-            if transcription is None or detections is None:
-                self.mediator.send(self, "generate_response")   
-                return
-            self.mediator.clear()
-            # Create prompt
-            print("transcription: ", transcription)
-            print("detections: ", detections)
-            #self.prompt = f"Analyse la commande suivante et décide de l'action à entreprendre : '{transcription}'. Les objets détectés sont : {detections}. Réponds en JSON selon les règles."
-            self.prompt = f"Analyze the following command and decide on the action to take: '{transcription}'. The detected objects are: {detections}. Respond in JSON according to the rules."
+    def set_transcription(self, transcription: str) -> None:
+        self.transcription = transcription
 
-            print( "SLM Prompt: ", self.prompt)
-            response = self.generate_response(self.prompt)
-            print("SLM: ", response)
-            try:
-                response = json.loads(response)[-1]
-            except json.JSONDecodeError as e:
-                print("SLM JSON parse error:", e)
-                response = {"response": "I didn't understand. Could you repeat?", "mode": "clarification"}
-            self.mediator.send(self, {"speak_request": response["response"]})
-            print(response)
+    def set_detections(self, detection_labels: Optional[list[int]] = None, detected_objects: Optional[list] = None) -> None:
+        resolved: list[str] = []
 
-            if response["mode"] == "confirmation":
-                self.mediator.send(self, {"eating": None})
-                # Execute eating action
-                # Verifier expression
-                self.transcription = None
-                self.detections = None
-                self.images = None
-                self.prompt = None
-                self.history = [{"role": "system", "content": SYSTEM_BIRA}]
-                self.mediator.send(self, {"sleep_mode": None})
+        if detection_labels:
+            resolved.extend(labels.labelDict[lid] for lid in detection_labels if lid in labels.labelDict)
 
-            elif response["mode"] == "clarification": 
-                self.transcription = None
-                self.mediator.send(self, {"transcription_request": None})
-                self.mediator.send(self, "detect_objects_request")
-                self.mediator.send(self, "generate_response")
-            elif response["mode"] == "stop":
-                self.mediator.send(self, {"sleep_mode": None})
-                self.transcription = None
-                self.detections = None
-                self.images = None
-                self.prompt = None
-                self.history = [{"role": "system", "content": SYSTEM_BIRA}]
+        if detected_objects:
+            for obj in detected_objects:
+                raw = getattr(obj, "raw_label", None)
+                if raw is None:
+                    continue
+                key = int(raw)
+                if key in labels.labelDict:
+                    resolved.append(labels.labelDict[key])
+
+        # Keep order while removing duplicates
+        self.detections = list(dict.fromkeys(resolved)) if resolved else None
+
+    def _build_prompt(self, transcription: str, detections: list[str]) -> str:
+        return (
+            "Analyze the following command and decide on the action to take: "
+            f"'{transcription}'. The detected objects are: {detections}. "
+            "Respond in JSON according to the rules."
+        )
+
+    def _parse_model_response(self, raw_response: str) -> dict:
+        try:
+            parsed = json.loads(raw_response)
+        except json.JSONDecodeError:
+            parsed = _parse_first_json(raw_response)
+
+        if isinstance(parsed, list) and parsed:
+            parsed = parsed[-1]
+
+        if not isinstance(parsed, dict):
+            raise ValueError("Model response is not a JSON object")
+
+        mode = parsed.get("mode", "clarification")
+        text = parsed.get("response", "I didn't understand. Could you repeat?")
+        return {"response": str(text), "mode": str(mode)}
+
+    def run_inference(self) -> dict:
+        transcription = self.transcription
+        detections = self.detections
+
+        if not transcription:
+            return {"response": "I didn't hear a command. Could you repeat?", "mode": "clarification"}
+
+        if not detections:
+            return {"response": "I don't see any relevant object. Could you clarify?", "mode": "clarification"}
+
+        self.prompt = self._build_prompt(transcription, detections)
+        raw_response = self.generate_response(self.prompt)
+
+        try:
+            response = self._parse_model_response(raw_response)
+        except (json.JSONDecodeError, ValueError) as err:
+            print("SLM JSON parse error:", err)
+            response = {"response": "I didn't understand. Could you repeat?", "mode": "clarification"}
+
+        if response["mode"] in {"stop"}:
+            self.reset_conversation()
+
+        return response
 
                 
 
@@ -298,15 +277,8 @@ class SLM_Manager(BiraComponent):
         )
         print("Modèle réveillé !")
 
-        # 4. Initialiser le client Python
-        self.client = Client(
-            # USE LOCAL OLLAMA SERVER
-            # host='http://localhost:11434'
-            
-            # USE API OLLAMA SERVER
-            host='https://ollama.com',
-            headers={'Authorization': 'Bearer ' + 'e96dd37a91844edab472f73e0b2b31a5.12O6_rnlOQaNsUCczRfqFsib'}
-            )
+        # 4. Initialiser / revalider le client Python local
+        self.client = Client(host="http://localhost:11434")
 
         print("Client Python prêt.")
 
@@ -329,7 +301,7 @@ class SLM_Manager(BiraComponent):
             {"role": "user", "content": prompt}
         )
         response = self.client.chat(
-            model="gpt-oss:120b",
+            model=self.model_name,
             messages=self.history,
                 options={
                     "temperature": self.temperature,
@@ -347,13 +319,60 @@ class SLM_Manager(BiraComponent):
 #  Exécution directe du script
 # --------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Analyse de commandes NL -> labels connus (labelDict)")
-    parser.add_argument("command", type=str, nargs="*", help="Commande en langage naturel")
-    parser.add_argument("--model", dest="BIRA", default="BIRA", help="Nom du modèle Ollama à utiliser")
+    parser = argparse.ArgumentParser(description="Test SLM_Manager inference locally")
+    parser.add_argument("--model", dest="BIRA", default="qwen3:1.7b", help="Model name to use")
+    parser.add_argument("--mode", default="local", choices=["local", "cloud"], help="Deployment mode")
+    parser.add_argument("--api-key", default="", help="API key for cloud mode")
+    
     args = parser.parse_args()
 
-    #cmd = " ".join(args.command).strip()
-    print("Ajouter votre commande: ")
-    cmd = input()
-    mgr = SLM_Manager(model_name=args.BIRA)
-    mgr.load_model()
+    # Initialize
+    print(f"Initializing SLM_Manager (mode: {args.mode}, model: {args.BIRA})")
+    mgr = SLM_Manager(model_name=args.BIRA, mode=args.mode, api_key=args.api_key if args.api_key else None)
+    
+    try:
+        mgr.load_model()
+    except Exception as e:
+        print(f"Warning: Model load failed: {e}")
+        print("Falling back to assuming the client is reachable...")
+        
+    print("\n--- Interactive SLM Test ---")
+    print("Type 'q' or 'quit' to exit.")
+    
+    while True:
+        try:
+            transcription = input("\nEnter user command (transcription): ").strip()
+            if transcription.lower() in ["q", "quit"]:
+                break
+                
+            detections_input = input("Enter detected objects (comma-separated labels, e.g. '0, 41, 39' for person, cup, bottle): ").strip()
+            if detections_input.lower() in ["q", "quit"]:
+                break
+                
+            # Parse detections (dummy mapping of YOLO COCO classes)
+            detection_labels = []
+            if detections_input:
+                try:
+                    detection_labels = [int(x.strip()) for x in detections_input.split(",") if x.strip()]
+                except ValueError:
+                    print("Error: Detected objects must be integers.")
+                    continue
+            
+            # Setup State
+            mgr.set_transcription(transcription)
+            mgr.set_detections(detection_labels=detection_labels)
+            
+            # Run Inference
+            print("\n[Running inference...]")
+            result = mgr.run_inference()
+            
+            # Display Result
+            print("\n--- Result ---")
+            print(f"Response: {result.get('response')}")
+            print(f"Mode:     {result.get('mode')}")
+            print("-------------")
+            
+        except KeyboardInterrupt:
+            break
+            
+    print("\nExiting SLM test.")

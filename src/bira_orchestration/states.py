@@ -163,15 +163,21 @@ class PlanningState(State):
         # TODO: Perform actions specific to Planning state
         # For example, analyze data from VisionState and make decisions
         # If successful, set feedback and plan next actions
-        response = self.bira_manager.controller.prompt_slm(self.bira_manager.get_data().objects_detected)
-        # self.bira_manager.add_feedback(response.feedback)
-        self.bira_manager.add_feedback(response)
-        
         context = self.bira_manager.get_data()
-        # context.object_selected = response.object_selected
-        context.object_selected = self.bira_manager.get_data().objects_detected[0]
-        print(context.object_selected)
-        context.planification_code = PlanificationCode.SUCCESS
+        response = self.bira_manager.controller.prompt_slm(context)
+        feedback = response.get("response", "Je n'ai pas compris la demande.")
+        mode = response.get("mode", "clarification")
+
+        self.bira_manager.add_feedback(feedback)
+        
+        if mode == "confirmation":
+            context.object_selected = context.objects_detected[0] if context.objects_detected else None
+            print(context.object_selected)
+            context.planification_code = PlanificationCode.SUCCESS
+        elif mode == "stop":
+            context.planification_code = PlanificationCode.IDLE
+        else:
+            context.planification_code = PlanificationCode.UNCLEAR_COMMAND
 
     def _decide_next_state(self):
         planification_code = self.bira_manager.get_data().planification_code

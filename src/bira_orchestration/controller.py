@@ -1,7 +1,7 @@
 from bira_components.camera import Camera
 from bira_components.computer_vision import ComputerVision
 from bira_components.micro import Micro
-from bira_components.SLM_Manager import SLM_Manager
+from bira_components.slm_manager import SLM_Manager
 from bira_components.speech_to_text import SpeechToText
 from bira_components.text_to_speech import TextToSpeech
 from bira_components.uart_transmitter import UARTTransmitter
@@ -17,7 +17,7 @@ class BIRA_Controller:
         self.micro = Micro()
         self.text_to_speech = TextToSpeech()
         self.speech_to_text = SpeechToText()
-        # self.slm_manager = SLM_Manager()
+        self.slm_manager = SLM_Manager(mode="local")
     
 
     # Example methods to control the components. TODO: Implement actual logic for these methods.
@@ -56,11 +56,17 @@ class BIRA_Controller:
     def speak(self, text):
         self.text_to_speech.speak(text)
     
-    def prompt_slm(self, data):
-        # prompt = self.slm_manager.create_prompt(data) # TODO: Define what data we want to send to the SLM and how to create the prompt.
-        # response = self.slm_manager.generate_response(prompt)
-        response = "This is a response from the SLM." # Placeholder response
-        return response
+    def prompt_slm(self, context):
+        user_input = context.user_inputs[-1] if context.user_inputs else None
+        detected_objects = getattr(context.objects_detected, "object_list", None)
+
+        self.slm_manager.set_transcription(user_input or "")
+        self.slm_manager.set_detections(
+            detection_labels=context.detection_labels,
+            detected_objects=detected_objects,
+        )
+
+        return self.slm_manager.run_inference()
     
     def destroy(self):
         components = [
@@ -70,7 +76,7 @@ class BIRA_Controller:
             self.micro,
             self.text_to_speech,
             self.speech_to_text,
-            # self.slm_manager
+            self.slm_manager,
         ]
 
         for component in components :
