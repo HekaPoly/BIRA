@@ -7,8 +7,8 @@ from ultralytics import YOLO
 import cv2
 import argparse
 
-from .camera import Camera
-from . import history as rd
+from camera import Camera
+import history as rd
 
 
 class ComputerVision():

@@ -2,9 +2,7 @@ from threading import Lock
 import pyzed.sl as sl
 import cv2
 
-from .bira_component import BiraComponent
-
-class Camera():
+class Camera:
     __lock = Lock()
     __instance =  None
 
