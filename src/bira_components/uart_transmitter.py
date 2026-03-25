@@ -10,24 +10,18 @@ from time import sleep
 from .bira_component import BiraComponent
 
 
-class UARTTransmitter(BiraComponent):
+class UARTTransmitter():
     def __init__(self, 
                  default_baud_rate = 115200, 
                  velocity_shift = 3, 
                  angle_shift = 16, 
                  bytes = 4, 
-                 uart_init_delay = 2,
-                 mediator=None):
-        super().__init__("uart_transmitter", mediator)
+                 uart_init_delay = 2):
         self.default_baud_rate = default_baud_rate
         self.velocity_shift = velocity_shift
         self.angle_shift = angle_shift
         self.bytes = bytes
         self.uart_init_delay = uart_init_delay
-        
-    def receive(self, message):
-        print(self.name)
-        pass
 
     def get_serial_ports_list(self) -> list:
         """ 
