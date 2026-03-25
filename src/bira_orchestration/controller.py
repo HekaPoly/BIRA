@@ -17,7 +17,7 @@ class BIRA_Controller:
         self.micro = Micro()
         self.text_to_speech = TextToSpeech()
         self.speech_to_text = SpeechToText()
-        self.slm_manager = SLM_Manager()
+        # self.slm_manager = SLM_Manager()
     
 
     # Example methods to control the components. TODO: Implement actual logic for these methods.
@@ -42,8 +42,9 @@ class BIRA_Controller:
         self.text_to_speech.speak(text)
     
     def prompt_slm(self, data):
-        prompt = self.slm_manager.create_prompt(data) # TODO: Define what data we want to send to the SLM and how to create the prompt.
-        response = self.slm_manager.generate_response(prompt)
+        # prompt = self.slm_manager.create_prompt(data) # TODO: Define what data we want to send to the SLM and how to create the prompt.
+        # response = self.slm_manager.generate_response(prompt)
+        response = "This is a response from the SLM." # Placeholder response
         return response
     
     def destroy(self):
@@ -54,7 +55,7 @@ class BIRA_Controller:
             self.micro,
             self.text_to_speech,
             self.speech_to_text,
-            self.slm_manager
+            # self.slm_manager
         ]
 
         for component in components :
