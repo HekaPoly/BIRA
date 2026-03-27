@@ -1,16 +1,7 @@
 import argparse
 from pathlib import Path
 
-from bira_orchestration.manager import BIRA_Manager
-# from bira_components.mediator import BiraMediator   
-# from bira_components.camera import Camera
-# from bira_components.computer_vision import ComputerVision
-# from bira_components.uart_transmitter import UARTTransmitter
-# from bira_components.micro import Micro
-# from bira_components.text_to_speech import TextToSpeech
-# from bira_components.speech_to_text import SpeechToText
-# from bira_components.SLM_Manager import SLM_Manager
-
+from bira_orchestration.manager import BiraManager
     
 def main():
     models_dir = Path(__file__).resolve().parents[1] / "models"
@@ -22,25 +13,7 @@ def main():
     parser.add_argument('--conf_thres', type=float, default=0.4, help='object confidence threshold')
 
     opt = parser.parse_args()
-    
-    
-    # mediator = BiraMediator()
-    # camera = Camera(mediator=mediator)
-    # computer_vision = ComputerVision(opt, mediator=mediator)
-    # uart_transmitter = UARTTransmitter(mediator=mediator)
-    # micro = Micro(mediator=mediator)
-    # text_to_speech = TextToSpeech(mediator=mediator)
-    # speech_to_text = SpeechToText(mediator=mediator, language="fr")
-    # slm = SLM_Manager(mediator=mediator)
-    
-    # mediator.send(mediator, {"initialize_components": None})
-    # mediator.send(mediator, {"sleep_mode": None})
-    
-    # print(mediator.handlers)
-    # # mediator.send_to(target=speech_to_text, sender=mediator, message={"transcribe_1": "recording.wav"})     
-    # mediator.run()
-
-    bira_manager = BIRA_Manager()
+    bira_manager = BiraManager()
     bira_manager.run()
     
     

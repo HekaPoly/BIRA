@@ -20,7 +20,7 @@ def _get_local_model():
     return _local_model
 
 
-class SpeechToText():
+class SpeechToText:
     def __init__(self, language="en", mediator=None, use_openai_api=None):
 
         self.language = language
@@ -87,15 +87,6 @@ class SpeechToText():
             text = (res.get("text") or "").strip()
         print("Stopped Transcription")
         return text
-
-    # #TODO: remove used method
-    # def receive(self, message):
-    #     print("STT", message.keys())
-    #     if "transcribe_1" in message:
-    #         print("Received transcribe_1 request")
-    #         result = self.transcribe(message["transcribe_1"])
-    #         print("Here's the result:", result)
-    #         self.mediator.send(self, {"transcription_ready": result})
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from bira_components.camera import Camera
 from bira_components import history as rd
 
 
-class ComputerVision():
+class ComputerVision:
 
     @staticmethod
     def _default_opt():
@@ -46,16 +46,7 @@ class ComputerVision():
         sl_object = self.detect(frame)
         detection_labels = [int(obj.label.item() if hasattr(obj.label, "item") else obj.label) for obj in self.__detections]
         return sl_object, detection_labels
-        
-        # TODO: remove old code after testing
-        if message.keys().__contains__('detect_objects_1'):
-            frame = message['detect_objects_1']
-            if frame is None:
-                return
-            sl_object = self.detect(frame)
-            # Send YOLO labels so SLM has detections even when ZED object_list is empty
-            detection_labels = [int(obj.label.item() if hasattr(obj.label, "item") else obj.label) for obj in self.__detections]
-            self.mediator.send_to(self, "SLM_Manager", {"detect_objects_ready": sl_object, "detection_labels": detection_labels})
+
 
     def __xywh2abcd(self, xywh):
         """Converts the bounding boxes from xywh format to abcd format

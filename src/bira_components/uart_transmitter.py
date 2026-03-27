@@ -7,15 +7,9 @@ from serial import Serial
 from serial.tools import list_ports
 from time import sleep
 
-
-class UARTTransmitter():
-    def __init__(self, 
-                 default_baud_rate = 115200, 
-                 velocity_shift = 3, 
-                 angle_shift = 16, 
-                 bytes = 4, 
-                 uart_init_delay = 2):
-        self.default_baud_rate = default_baud_rate
+class UARTTransmitter:
+    def __init__(self, baud_rate = 115200, velocity_shift = 3, angle_shift = 16, bytes = 4, uart_init_delay = 2):
+        self.default_baud_rate = baud_rate
         self.velocity_shift = velocity_shift
         self.angle_shift = angle_shift
         self.bytes = bytes
@@ -24,17 +18,13 @@ class UARTTransmitter():
     def get_serial_ports_list(self) -> list:
         """ 
         This function returns a list of active serial ports;
-
-        Parameters:
-            None
-
         Returns:
             list_com_ports (list): Active serial ports.
         """
         com_ports = list_ports.comports()
         list_com_ports = []
 
-        if (len(com_ports) != 0):
+        if len(com_ports) != 0:
             for port in com_ports:
                 if "Windows" in platform():
                     list_com_ports.append(port.name)
@@ -52,8 +42,7 @@ class UARTTransmitter():
             motor_id (int): The ID of the motor to control.
             velocity (int): The velocity of the motor.
 
-        Returns:
-            None.
+
         """
         angle =  int(angle) % 360
         if angle < 0 or angle > 360:

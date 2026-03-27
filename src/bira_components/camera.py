@@ -16,28 +16,14 @@ class Camera:
         return Camera.__instance
     
     def __init__(self):
-        if self.isInitialised is False:
+        if not self.isInitialised:
             with Camera.__lock:
-                if self.isInitialised is False:
+                if not self.isInitialised:
                     self.__init_params = sl.InitParameters()
                     self.__zed = sl.Camera()
                     self.__camera_pose = sl.Pose()
                     self.__image = sl.Mat()
                     self.isInitialised = True
-    
-    # def receive(self, message):
-    #     if message.keys().__contains__('initialize_components'):
-    #         self.open()
-    #     elif message.keys().__contains__('close_camera'):
-    #         self.close()
-    #     elif message.keys().__contains__('detect_objects_request'):
-    #         print('start detect_objects_request')
-    #         if self.grab() == sl.ERROR_CODE.SUCCESS:
-    #             frame = self.get_frame()
-    #             self.mediator.send_to(self, "computer_vision", {"detect_objects_1": frame})
-    #         else:
-    #             self.mediator.send_to(self, "computer_vision", {"detect_objects_1": None})
-
 
     def get_camera(self):
         return self.__zed
@@ -45,7 +31,7 @@ class Camera:
     def open(self, init_params = None):
         """Opens the zed camera.
         
-        If it is not openned already. The program will end if the camera can't be openned.
+        If it is not opened already. The program will end if the camera can't be opened.
         Parameters:
             init_params (sl.InitParameters): Class containing the options used to initialize the sl.Camera object.
         Returns: 
@@ -72,7 +58,7 @@ class Camera:
         Parameters:
             runtime_params (sl.RuntimeParameters): Contains parameters that defines the behavior of self.__zed.grab()
         Returns:
-            ERROR_CODE: Describes if the grab was successfull or not
+            ERROR_CODE: Describes if the grab was successful or not
         """
         return self.__zed.grab(runtime_params)
 
@@ -83,7 +69,7 @@ class Camera:
             memory (sl.MEM): The memory the image should be allocated
             resolution (sl.Resolution):  The Resolution you want for the image
         Returns:
-            np.array or None: Returns a np.array representing the image if the retrieve was successfull, otherwise returns None
+            np.array or None: Returns a np.array representing the image if the retrieve was successful, otherwise returns None
         """
         with Camera.__lock:
             if self.__zed.retrieve_image(self.__image, view, memory, resolution) == sl.ERROR_CODE.SUCCESS:
@@ -137,7 +123,7 @@ if __name__ == "__main__":
     
     with cam:
         while True:
-            if (cam.grab()):
+            if cam.grab():
                 frame = cam.get_frame()
                 if frame is not None:
                     print("Image retrieved successfully.")

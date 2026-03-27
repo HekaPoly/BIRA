@@ -1,6 +1,7 @@
-
 import pyttsx3
 import random
+
+MAX_LEN = 180
 
 class TextToSpeech:
     
@@ -14,18 +15,11 @@ class TextToSpeech:
 
             
     def speak(self, text: str):
-        self.speak_sync(text)
-        
-        
-    def speak_sync(self, text: str):
         """
         Convert the given text to speech and play it.
         Parameters:
             text (str): The text to be converted to speech.
-        Returns:
-            None
         """
-        MAX_LEN = 180
 
         for i in range(0, len(text), MAX_LEN):
             chunk = text[i:i+MAX_LEN]
@@ -39,10 +33,6 @@ class TextToSpeech:
     def stop(self):
         """
         Stop the speech engine.
-        Parameters:
-            None
-        Returns:
-            None
         """
         self.engine.stop()
 
@@ -50,5 +40,5 @@ if __name__== "__main__":
     tts = TextToSpeech(voice="fr+f3")
     print("Testing TTS...", flush=True)
 
-    text = """Voici les objets que j'ai détectés : person, ordinateur portable, ... etc."""
+    text = "Voici les objets que j'ai détectés : person, ordinateur portable, ... etc."
     tts.speak(text)
