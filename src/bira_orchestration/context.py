@@ -5,7 +5,7 @@ from bira_orchestration.enums import ListeningCode, VisionCode, PlanificationCod
 
 # Object context is managed by the BIRA_CONTROLLER, response codes are managed by states.
 @dataclass
-class BIRA_Context:
+class BiraContext:
     objects_detected: list = field(default_factory=list)
     detection_labels: list = field(default_factory=list)
     user_inputs: list[str] = field(default_factory=list)

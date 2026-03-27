@@ -1,6 +1,11 @@
-from bira_orchestration.context import BIRA_Context
-from bira_orchestration.controller import BIRA_Controller
-from bira_orchestration.states import IdleState, ListeningState, VisionState, PlanningState, ExecutingState, ExitState
+from bira_orchestration.context import BiraContext
+from bira_orchestration.controller import BiraController
+from bira_orchestration.states.executing_state import ExecutingState
+from bira_orchestration.states.exiting_state import ExitState
+from bira_orchestration.states.idle_state import IdleState
+from bira_orchestration.states.listening_state import ListeningState
+from bira_orchestration.states.planning_state import PlanningState
+from bira_orchestration.states.vision_state import VisionState
 from bira_orchestration.enums import StateCode
 
 STATE_CLASSES = {
@@ -12,11 +17,11 @@ STATE_CLASSES = {
     StateCode.EXIT: ExitState,
 }
 
-class BIRA_Manager:
+class BiraManager:
     def __init__(self):
-        self.controller = BIRA_Controller()
+        self.controller = BiraController()
         self.state = IdleState(self)
-        self._context = BIRA_Context()
+        self._context = BiraContext()
         self.counter = 0
     
     def add_user_input(self, user_input: str):

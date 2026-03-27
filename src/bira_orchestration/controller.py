@@ -8,19 +8,20 @@ from bira_components.uart_transmitter import UARTTransmitter
 from time import sleep
 
 
-class BIRA_Controller:
+class BiraController:
     def __init__(self):
-        # TODO: Decouple components from mediator. We want to get rid of the mediator and have the controller directly manage the components.
         self.camera = Camera()
-        self.computer_vision = ComputerVision(camera=self.camera) # TODO: We should not pass the camera to the computer vision. We should have a better way to share data between components. Maybe we can have a shared memory or a shared database where the camera can write the frames and the computer vision can read them.
+        # TODO: We should not pass the camera to the computer vision. We should have a better way to share data between
+        #  components. Maybe we can have a shared memory or a shared database where the camera can write the frames and
+        #  the computer vision can read them.
+        self.computer_vision = ComputerVision(camera=self.camera)
         # self.uart_transmitter = UARTTransmitter()
         self.micro = Micro()
         self.text_to_speech = TextToSpeech()
         self.speech_to_text = SpeechToText()
         self.slm_manager = SLM_Manager(mode="local")
-    
 
-    # Example methods to control the components. TODO: Implement actual logic for these methods.
+
     def sleep_mode(self):
         self.micro.wait_for_volume()
     
@@ -40,11 +41,11 @@ class BIRA_Controller:
                 else:
                     print("No frame")
                     self.camera.close()
-                    return
+                    return None
             else:
                 print("No camera")
                 self.camera.close()
-                return
+                return None
         
         self.camera.close()
         return sl_object, detection_labels
