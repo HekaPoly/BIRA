@@ -138,6 +138,7 @@ class SLM_Manager:
         self.tensorrt_engine_dir = Path(tensorrt_engine_dir or default_engine_dir)
         self.trt_engine: Optional[TensorRTInferenceEngine] = None
         self.trt_ready = False
+        self.model_loaded = False
 
         if mode == "cloud":
             if not api_key:
@@ -181,6 +182,27 @@ class SLM_Manager:
             if not self.tensorrt_fallback_to_ollama:
                 raise RuntimeError(f"TensorRT initialization failed: {exc}") from exc
             print(f"TensorRT unavailable ({exc}). Falling back to Ollama.")
+
+    def _warmup_tensorrt_backend(self) -> None:
+        if not self.trt_ready or not self.trt_engine:
+            return
+
+        print("Warming up TensorRT backend...")
+        self.trt_engine.chat(
+            messages=[{"role": "user", "content": "Reply with {}."}],
+            max_new_tokens=8,
+            temperature=0.0,
+        )
+        print("TensorRT backend ready.")
+
+    def _warmup_ollama_backend(self) -> None:
+        print(f"Starting model {self.model_name}...")
+        self.client.generate(
+            model=self.model_name,
+            prompt="Reply with {}.",
+            options={"num_predict": 8, "temperature": 0},
+        )
+        print("Model is awake.")
 
     def reset_conversation(self) -> None:
         self.history = [{"role": "system", "content": SYSTEM_BIRA}]
@@ -260,10 +282,19 @@ class SLM_Manager:
         return response
 
     def load_model(self):
+        if self.model_loaded:
+            return
+
+        tensorrt_ready = False
         if self.prefer_tensorrt:
-            if self.trt_ready and not self.tensorrt_fallback_to_ollama:
-                print("TensorRT is ready. Skipping Ollama startup.")
-                return
+            if self.trt_ready and self.trt_engine:
+                self._warmup_tensorrt_backend()
+                tensorrt_ready = True
+
+                if not self.tensorrt_fallback_to_ollama:
+                    print("TensorRT is ready. Skipping Ollama startup.")
+                    self.model_loaded = True
+                    return
 
             if not self.trt_ready and not self.tensorrt_fallback_to_ollama:
                 raise RuntimeError(
@@ -274,23 +305,24 @@ class SLM_Manager:
         if self.mode == "cloud":
             print(f"Checking model '{self.model_name}' through Ollama Cloud...")
             try:
-                _ = self.client.generate(
-                    model=self.model_name,
-                    prompt="ping",
-                    options={"num_predict": 5},
-                )
+                self._warmup_ollama_backend()
             except Exception as exc:
+                if tensorrt_ready:
+                    print(f"Ollama Cloud warmup skipped ({exc}). TensorRT remains available.")
+                    self.model_loaded = True
+                    return
                 raise RuntimeError(
                     "Unable to contact Ollama Cloud. Check the API key and the model name."
                 ) from exc
 
             print("Cloud model is reachable.")
             print("Python client ready.")
+            self.model_loaded = True
             return
 
         print("Checking local Ollama server...")
         try:
-            subprocess.run(
+            models_result = subprocess.run(
                 ["ollama", "list"],
                 check=True,
                 capture_output=True,
@@ -299,34 +331,40 @@ class SLM_Manager:
                 errors="replace",
             )
         except Exception as exc:
+            if tensorrt_ready:
+                print(f"Local Ollama warmup skipped ({exc}). TensorRT remains available.")
+                self.model_loaded = True
+                return
             raise RuntimeError("Ollama is not running. Start it with 'ollama serve'.") from exc
 
-        models = subprocess.run(
-            ["ollama", "list"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        ).stdout
+        models = models_result.stdout
 
         if self.model_name not in models:
+            if tensorrt_ready:
+                print(f"Model {self.model_name} not found in Ollama. TensorRT remains available.")
+                self.model_loaded = True
+                return
             raise RuntimeError(
                 f"The model {self.model_name} does not exist in Ollama.\n"
                 f"Create it with: ollama create {self.model_name} -f Modelfile"
             )
 
-        print(f"Starting model {self.model_name}...")
-        subprocess.run(
-            ["ollama", "run", self.model_name],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        print("Model is awake.")
+        try:
+            self._warmup_ollama_backend()
+        except Exception as exc:
+            if tensorrt_ready:
+                print(f"Local Ollama warmup skipped ({exc}). TensorRT remains available.")
+                self.model_loaded = True
+                return
+            raise RuntimeError(
+                f"Unable to warm up local model '{self.model_name}'."
+            ) from exc
 
-        self.client = Client(host="http://localhost:11434")
         print("Python client ready.")
+        self.model_loaded = True
+
+    def preload(self) -> None:
+        self.load_model()
 
     def generate_response(self, prompt: str) -> str:
         self.history.append({"role": "user", "content": prompt})

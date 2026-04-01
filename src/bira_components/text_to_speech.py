@@ -13,6 +13,13 @@ class TextToSpeech:
         self.engine.setProperty('volume', self.volume)
         self.engine.setProperty('voice', voice)
 
+    def preload(self):
+        print("Preloading text-to-speech engine...")
+        _ = self.engine.getProperty('voices')
+        _ = self.engine.getProperty('voice')
+        _ = self.engine.getProperty('rate')
+        print("Text-to-speech engine ready.")
+
             
     def speak(self, text: str):
         """
