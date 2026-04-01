@@ -1,13 +1,15 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 
+import pyzed.sl as sl
+
 from bira_orchestration.enums import ListeningCode, VisionCode, PlanificationCode, ExecutionCode
 
 # Object context is managed by the BIRA_CONTROLLER, response codes are managed by states.
 @dataclass
 class BiraContext:
-    objects_detected: list = field(default_factory=list)
-    detection_labels: list = field(default_factory=list)
+    objects_detected: list[sl.ObjectData] = field(default_factory=list)
+    detection_labels: list[int] = field(default_factory=list)
     user_inputs: list[str] = field(default_factory=list)
     feedbacks: list[str] = field(default_factory=list)
     object_selected: object | None = None

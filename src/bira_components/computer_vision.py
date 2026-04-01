@@ -12,6 +12,16 @@ from bira_components import history as rd
 
 
 class ComputerVision:
+    """
+    Computer Vision module using YOLOv8 for object detection with ZED SDK integration.
+    
+    This class wraps YOLO object detection and integrates with the ZED SDK to provide
+    3D position tracking and object metadata. When you call detect_objects(), it returns
+    both 2D/3D detection data and confidence scores.
+    
+    For detailed information on the detection object structure and how to use it, see:
+    - docs/COMPUTER_VISION_USAGE.md in the project root
+    """
 
     @staticmethod
     def _default_opt():
@@ -43,6 +53,31 @@ class ComputerVision:
         print("Network initialized")
         
     def detect_objects(self, frame):
+        """
+        Detect objects in a frame and return both ZED SDK Objects container and YOLO labels.
+        
+        Args:
+            frame: Image frame (numpy array, BGRA format)
+            
+        Returns:
+            Tuple[sl.Objects, List[int]]:
+            - sl.Objects: ZED SDK container with object_list (list of sl.ObjectData)
+            - List[int]: Raw YOLO label IDs corresponding to each detection
+            
+        Usage:
+            sl_object, detection_labels = computer_vision.detect_objects(frame)
+            
+            # Access detected objects
+            for obj in sl_object.object_list:  # type: sl.ObjectData
+                position_3d = obj.position      # [x, y, z] in world coordinates
+                bbox_2d = obj.bounding_box_2d   # 4 corner points in image pixels
+                confidence = obj.confidence     # 0-100 detection confidence
+                label = obj.label               # OBJECT_CLASS enum (e.g., PERSON, CUP)
+            
+            # Access YOLO labels
+            for label in detection_labels:
+                print(f"Detected label ID: {label}")
+        """
         sl_object = self.detect(frame)
         detection_labels = [int(obj.label.item() if hasattr(obj.label, "item") else obj.label) for obj in self.__detections]
         return sl_object, detection_labels
@@ -127,12 +162,21 @@ class ComputerVision:
         return cv2.cvtColor(hsv_filtered, cv2.COLOR_HSV2BGR)
     
     def detect(self, frame, iou_thres=0.45):
-        """Detects the objects present in the frame given.
+        """
+        Low-level detection method. Prefer detect_objects() for most use cases.
+        
+        Detects the objects present in the frame given and returns ZED SDK Objects
+        with full 3D metadata (position, bounding boxes, depth info, etc.).
+        
         Parameters:
-            frame (np.array): The image
-            iou_thres (float): The intersection Over Union (IoU)
-        Results:
-            sl.Objects: The object containing the results of the detection.
+            frame (np.array): The image frame in BGRA format
+            iou_thres (float): The intersection Over Union (IoU) for NMS. Default 0.45
+            
+        Returns:
+            sl.Objects: ZED SDK Objects container with:
+                - object_list: list[sl.ObjectData] containing detected objects
+                - is_new(): whether this is fresh data
+                - is_tracked(): whether tracking is active
         """
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
