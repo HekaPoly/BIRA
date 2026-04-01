@@ -23,6 +23,9 @@ class BiraManager:
         self.state = IdleState(self)
         self._context = BiraContext()
         self.counter = 0
+
+    def preload(self):
+        self.controller.preload_components()
     
     def add_user_input(self, user_input: str):
         self._context.user_inputs.append(user_input)

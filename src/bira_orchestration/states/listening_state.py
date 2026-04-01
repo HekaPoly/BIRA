@@ -1,4 +1,4 @@
-from base_state import State
+from bira_orchestration.states.base_state import State
 from bira_orchestration.enums import StateCode, ListeningCode
 
 class ListeningState(State):

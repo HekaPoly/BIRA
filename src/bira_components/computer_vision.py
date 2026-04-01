@@ -41,6 +41,18 @@ class ComputerVision:
         self.yolo.model.eval()
         self._lock = asyncio.Lock()
         print("Network initialized")
+
+    def warmup(self):
+        print("Warming up YOLO inference...")
+        dummy_image = np.zeros((self.__opt.img_size, self.__opt.img_size, 3), dtype=np.uint8)
+        self.yolo.predict(
+            dummy_image,
+            save=False,
+            verbose=False,
+            imgsz=self.__opt.img_size,
+            conf=self.__opt.conf_thres,
+        )[0]
+        print("YOLO inference ready.")
         
     def detect_objects(self, frame):
         sl_object = self.detect(frame)

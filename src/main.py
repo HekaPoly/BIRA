@@ -14,6 +14,7 @@ def main():
 
     opt = parser.parse_args()
     bira_manager = BiraManager()
+    bira_manager.preload()
     bira_manager.run()
     
     

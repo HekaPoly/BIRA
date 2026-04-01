@@ -21,6 +21,20 @@ class BiraController:
         self.speech_to_text = SpeechToText()
         self.slm_manager = SLM_Manager(mode="local")
 
+    def preload_components(self):
+        preload_steps = [
+            ("text-to-speech engine", self.text_to_speech.preload),
+            ("speech-to-text model", self.speech_to_text.preload),
+            ("vision model", self.computer_vision.warmup),
+            ("language model", self.slm_manager.preload),
+        ]
+
+        for label, preload in preload_steps:
+            print(f"Preloading {label}...")
+            try:
+                preload()
+            except Exception as exc:
+                print(f"Unable to preload {label}: {exc}")
 
     def sleep_mode(self):
         self.micro.wait_for_volume()

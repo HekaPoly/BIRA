@@ -1,4 +1,4 @@
-from base_state import State
+from bira_orchestration.states.base_state import State
 from bira_orchestration.enums import VisionCode, StateCode
 
 class VisionState(State):
@@ -17,6 +17,18 @@ class VisionState(State):
         context.objects_detected = sl_object.object_list
         context.detection_labels = detection_labels
         context.vision_code = VisionCode.SUCCESS
+
+        for obj in context.objects_detected:
+            obj_id = obj.id
+            confidence = obj.confidence
+            position_3d = obj.position  # [x, y, z]
+            bbox_2d = obj.bounding_box_2d
+            print(f"Object ID: {obj_id}, Confidence: {confidence}, Position: {position_3d}, BBox: {bbox_2d}")
+
+        if not context.objects_detected:
+            print("No objects returned by vision.")
+
+        print(f"Corresponding labels: {context.detection_labels}")
 
     def _decide_next_state(self):
         vision_code = self.bira_manager.get_data().vision_code
