@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 import argparse
 import json
 import os
@@ -70,36 +70,75 @@ def _parse_first_json(text: str) -> dict:
 SYSTEM_BIRA = """
 You are BIRA, a friendly, enthusiastic, and helpful assistant designed to interpret object-grasping commands.
 The user will give instructions and your task is to find which action to do based on the detected objects.
-If the object is not detected, you must ask for clarification.
 You must ALWAYS respond EXCLUSIVELY in valid JSON.
 
-FUNDAMENTAL RULES:
+═══════════════════════════════════════════════════════════════
+MODE DECISION TREE (APPLY IN ORDER):
+═══════════════════════════════════════════════════════════════
 
-Response:
-   - Provide a confirmation sentence in the first person, with a friendly and enthusiastic tone.
-   - Rephrase the action in an active way, including the identified object.
-   - Examples:
-       "Alright, I'm [ACTION] the [OBJECT]."
-       "Got it, I'll [ACTION] the [OBJECT] for you."
+1. STOP CHECK: Did the user ask to cancel, abort, or stop?
+   → YES: Set mode='stop'. Respond: "Alright, I'm cancelling the operation."
+   → NO: Continue to step 2.
 
-   - If the command is too vague (imprecise object, unclear term, unclear action), ask for clarification enthusiastically.
-   - If the request refers to a group of objects (e.g., "the stuff", "the things"), ask for clarification.
-   - If the mentioned objects cannot be detected or do not seem to be present, ask for clarification.
-   - If the user wants to eat a specific [OBJECT], you must confirm by responding that you will bring the food [OBJECT].
-   - Examples:
-       "I'm happy to help, but I do not see [OBJECT]. Could you specify which one you mean?"
-       "I'm happy to help, but I can't seem to identify the [OBJECT]. Could you describe it a bit more?"
-       "I'm happy to help, but I can't seem to identify the object. Could you describe it a bit more?"
+2. INTELLIGIBILITY CHECK: Is the transcription empty or completely unintelligible?
+   → YES: Set mode='repeat'. Ask user to repeat in a friendly manner.
+   → NO: Continue to step 3.
 
+3. ACTION CLARITY CHECK: Can you understand what ACTION the user wants?
+   (e.g., pick, grab, bring, fetch, move, place, etc.)
+   → NO: Set mode='repeat'. Respond: "I'm sorry, I couldn't understand the action you want. Could you repeat?"
+   → YES: Continue to step 4.
+
+4. OBJECT MATCHING: How many candidate objects match the command from the provided candidate list?
+   
+   CASE A: 0 matches (no object in list matches the described object)
+   → Set mode='clarification'. Respond with a friendly question asking the user to describe the object better
+     or confirm if they see it. Examples:
+       "I'm happy to help, but I don't see that object. Could you describe it differently?"
+       "I'm not detecting the [OBJECT]. Is it visible in front of me?"
+   
+   CASE B: Exactly 1 match (one unique object matches the command)
+   → Set mode='confirmation'. Provide the selected_candidate_index and respond with an enthusiastic confirmation.
+     Always include the found object name in your response.
+     Examples:
+       "Alright, I'm picking up the [OBJECT]."
+       "Got it, I'll grab the [OBJECT] for you."
+   
+   CASE C: Multiple matches (>1 candidate could match the command)
+   → Set mode='clarification'. Ask for a disambiguating detail to narrow down which specific object.
+     Suggest positional hints like: "the one on the left", "the top one", "the closest one", etc.
+     Examples:
+       "I found several [OBJECT]s. Could you tell me which one? (e.g., left, right, closest, farthest?)"
+       "There are multiple [OBJECT]s. Which one would you like? (e.g., the one on the left, the one on top?)"
+
+5. SCOPE CHECK: Is the user asking something outside object-grasping assistance?
+   (e.g., "sing a song", "tell a joke", "dance", "what's the weather")
+   → YES: Set request_scope='out_of_scope', mode='clarification', and explain briefly that you can only help with object-related commands.
+   → NO: Set request_scope='in_scope'.
+
+═══════════════════════════════════════════════════════════════
+IMPORTANT CONSTRAINTS:
+═══════════════════════════════════════════════════════════════
+- If you select a candidate by index, ALWAYS return selected_candidate_index.
+- selected_label and selected_label_id should match the candidate data when applicable.
+- NEVER make assumptions about which object if multiple could match.
+- NEVER invent object names that are not in the candidate list.
+- For groups like "the stuff" or "the things", ask for clarification (mode='clarification').
+- If candidate list is provided with positions, you may reference positions in clarification questions.
+
+═══════════════════════════════════════════════════════════════
 OUTPUT FORMAT:
-Always return strictly valid JSON, even if some fields are null or empty.
-
-IT IS IMPERATIVE TO STRICTLY FOLLOW THE STRUCTURE BELOW AND MAKE SURE THE MODE IS PRESENT.
-Structure:
+═══════════════════════════════════════════════════════════════
+Always return STRICTLY VALID JSON, even if some fields are null or empty.
+Required structure:
 [{
   "response": "...",
-  "mode": "confirmation" | "clarification" | "stop"
-},]
+  "mode": "confirmation" | "clarification" | "repeat" | "stop",
+    "request_scope": "in_scope" | "out_of_scope",
+  "selected_candidate_index": <int> | null,
+  "selected_label": "<object_name_from_detected_list>" | null,
+  "selected_label_id": <int> | null
+}]
 """
 
 
@@ -121,6 +160,7 @@ class SLM_Manager:
         self.mode = mode
         self.history = [{"role": "system", "content": SYSTEM_BIRA}]
         self.detections = None
+        self.detection_candidates = None
         self.transcription = None
         self.prompt = None
         self.prefer_tensorrt = (
@@ -135,7 +175,7 @@ class SLM_Manager:
         )
         default_engine_dir = Path(__file__).resolve().parent / "tensorRT" / "tensorrt_models" / "engines"
         self.tensorrt_engine_dir = Path(tensorrt_engine_dir or default_engine_dir)
-        self.trt_engine: Optional[TensorRTInferenceEngine] = None
+        self.trt_engine: Optional[Any] = None
         self.trt_ready = False
         self.model_loaded = False
 
@@ -206,6 +246,7 @@ class SLM_Manager:
     def reset_conversation(self) -> None:
         self.history = [{"role": "system", "content": SYSTEM_BIRA}]
         self.detections = None
+        self.detection_candidates = None
         self.transcription = None
         self.prompt = None
 
@@ -227,26 +268,68 @@ class SLM_Manager:
             computer_vision: ComputerVision instance for label name resolution
         """
         resolved: list[str] = []
+        candidates: list[dict] = []
 
         if detection_labels and computer_vision:
             resolved.extend(
-                computer_vision.get_label_name(label_id) 
+                computer_vision.get_label_name(label_id)
                 for label_id in detection_labels
             )
+        elif detection_labels:
+            # Fallback for standalone usage (e.g., __main__) when ComputerVision is unavailable.
+            resolved.extend(str(label_id) for label_id in detection_labels)
 
         if detected_objects and computer_vision:
-            for obj in detected_objects:
+            for index, obj in enumerate(detected_objects):
                 raw = getattr(obj, "raw_label", None)
                 if raw is None:
                     continue
-                resolved.append(computer_vision.get_label_name(int(raw)))
+                label_id = int(raw)
+                label_name = computer_vision.get_label_name(label_id)
+                resolved.append(label_name)
+
+                position = getattr(obj, "position", None)
+                if position is not None and len(position) >= 3:
+                    pos_value = [float(position[0]), float(position[1]), float(position[2])]
+                else:
+                    pos_value = None
+
+                candidates.append(
+                    {
+                        "index": index,
+                        "label": label_name,
+                        "label_id": label_id,
+                        "position": pos_value,
+                    }
+                )
+
+        if not candidates and detection_labels:
+            for index, label_id in enumerate(detection_labels):
+                label_name = str(label_id)
+                if computer_vision:
+                    label_name = computer_vision.get_label_name(label_id)
+                candidates.append(
+                    {
+                        "index": index,
+                        "label": label_name,
+                        "label_id": int(label_id),
+                        "position": None,
+                    }
+                )
 
         self.detections = list(dict.fromkeys(resolved)) if resolved else None
+        self.detection_candidates = candidates if candidates else None
 
-    def _build_prompt(self, transcription: str, detections: list[str]) -> str:
+    def _build_prompt(self, transcription: str, detections: list[str], candidates: Optional[list[dict]]) -> str:
+        candidates_text = json.dumps(candidates or [], ensure_ascii=False)
         return (
             "Analyze the following command and decide on the action to take: "
             f"'{transcription}'. The detected objects are: {detections}. "
+            f"Candidate list (each candidate has index, label, label_id, and optional position [x, y, z]): {candidates_text}. "
+            "If the user asks for something outside object-grasping assistance (e.g., singing, jokes, weather), "
+            "set request_scope='out_of_scope' and keep mode='clarification'. "
+            "When selecting one object, prefer returning selected_candidate_index. "
+            "If you still cannot uniquely choose one object, ask a clarification question and keep mode='clarification'. "
             "Respond in JSON according to the rules."
         )
 
@@ -263,27 +346,81 @@ class SLM_Manager:
             raise ValueError("Model response is not a JSON object")
 
         mode = parsed.get("mode", "clarification")
+        mode = str(mode).strip().lower()
+        if mode not in {"confirmation", "clarification", "repeat", "stop"}:
+            mode = "clarification"
+        request_scope = parsed.get("request_scope", "in_scope")
+        request_scope = str(request_scope).strip().lower()
+        if request_scope not in {"in_scope", "out_of_scope"}:
+            request_scope = "in_scope"
         text = parsed.get("response", "I didn't understand. Could you repeat?")
-        return {"response": str(text), "mode": str(mode)}
+        selected_label = parsed.get("selected_label")
+        if selected_label is not None:
+            selected_label = str(selected_label).strip() or None
+
+        selected_label_id = parsed.get("selected_label_id")
+        if selected_label_id is not None:
+            try:
+                selected_label_id = int(selected_label_id)
+            except (TypeError, ValueError):
+                selected_label_id = None
+
+        selected_candidate_index = parsed.get("selected_candidate_index")
+        if selected_candidate_index is not None:
+            try:
+                selected_candidate_index = int(selected_candidate_index)
+            except (TypeError, ValueError):
+                selected_candidate_index = None
+
+        return {
+            "response": str(text),
+            "mode": mode,
+            "request_scope": request_scope,
+            "selected_label": selected_label,
+            "selected_label_id": selected_label_id,
+            "selected_candidate_index": selected_candidate_index,
+        }
 
     def run_inference(self) -> dict:
         transcription = self.transcription
         detections = self.detections
+        candidates = self.detection_candidates
 
         if not transcription:
-            return {"response": "I didn't hear a command. Could you repeat?", "mode": "clarification"}
+            return {
+                "response": "I didn't hear a command. Could you repeat?",
+                "mode": "repeat",
+                "request_scope": "in_scope",
+                "selected_label": None,
+                "selected_label_id": None,
+                "selected_candidate_index": None,
+            }
 
         if not detections:
-            return {"response": "I don't see any relevant object. Could you clarify?", "mode": "clarification"}
+            return {
+                "response": "I don't see any relevant object. Could you clarify?",
+                "mode": "clarification",
+                "request_scope": "in_scope",
+                "selected_label": None,
+                "selected_label_id": None,
+                "selected_candidate_index": None,
+            }
 
-        self.prompt = self._build_prompt(transcription, detections)
+        self.prompt = self._build_prompt(transcription, detections, candidates)
         raw_response = self.generate_response(self.prompt)
 
         try:
             response = self._parse_model_response(raw_response)
         except (json.JSONDecodeError, ValueError) as err:
             print("SLM JSON parse error:", err)
-            response = {"response": "I didn't understand. Could you repeat?", "mode": "clarification"}
+            response = {
+                "response": "I didn't understand. Could you repeat?",
+                "mode": "repeat",
+                "request_scope": "in_scope",
+                "selected_label": None,
+                "selected_label_id": None,
+                "selected_candidate_index": None,
+            }
 
         if response["mode"] == "stop":
             self.reset_conversation()

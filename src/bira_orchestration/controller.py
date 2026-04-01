@@ -74,8 +74,8 @@ class BiraController:
         self.text_to_speech.speak(text)
     
     def prompt_slm(self, context):
-        user_input = context.user_inputs[-1] if context.user_inputs else None
-        detected_objects = getattr(context.objects_detected, "object_list", None)
+        user_input = " | ".join(context.user_inputs) if context.user_inputs else None
+        detected_objects = context.objects_detected if context.objects_detected else None
 
         self.slm_manager.set_transcription(user_input or "")
         self.slm_manager.set_detections(
