@@ -28,6 +28,7 @@ class BiraController:
     def listen(self):
         self.micro.record()
         transcription = self.speech_to_text.transcribe()
+        self.micro.clear_recording()
         return transcription
     
     def vision(self):

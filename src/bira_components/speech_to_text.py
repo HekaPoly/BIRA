@@ -9,6 +9,7 @@ OPENAI_API_KEY = None  # or set directly: OPENAI_API_KEY = "sk-..."
 # Local whisper model (loaded only when USE_OPENAI_API is False)
 _local_model = None
 
+RECORDING_FILE_PATH = 'recording.wav'
 
 def _get_local_model():
     global _local_model
@@ -27,7 +28,7 @@ class SpeechToText:
         self.use_openai_api = use_openai_api if use_openai_api is not None else USE_OPENAI_API
         self._client = OpenAI(api_key=OPENAI_API_KEY) if (self.use_openai_api and OPENAI_API_KEY) else None
 
-    def transcribe(self, audio_data="recording.wav"):
+    def transcribe(self, audio_data=RECORDING_FILE_PATH):
         """
         Transcribe an audio file to text using either the OpenAI Whisper API or a local Whisper model.
 
