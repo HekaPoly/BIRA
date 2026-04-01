@@ -1,6 +1,10 @@
+import os
+
 import sounddevice as sd
 import numpy as np
 import wave
+
+RECORDING_FILE_PATH = 'recording.wav'
 
 class Micro:
     def __init__(self, frequency=44100, device=None):
@@ -64,7 +68,7 @@ class Micro:
     def record(self):
         print('start transcription_request')
         self._record(duration=5)
-        self._save_recording('recording.wav')
+        self._save_recording(RECORDING_FILE_PATH)
 
     def _start_recording(self):
         """
@@ -144,7 +148,7 @@ class Micro:
         self._stop_recording()
         # TODO: change to sd.rec(...)
 
-    def _save_recording(self, filename="recording.wav"):
+    def _save_recording(self, filename=RECORDING_FILE_PATH):
         """
         Save the recorded audio as a WAV file.
 
@@ -164,6 +168,14 @@ class Micro:
             file.setframerate(self.frequency)
             file.writeframes(self.audio_data.tobytes())
         print(f"File saved: {filename}")
+
+    @staticmethod
+    def clear_recording():
+        if os.path.exists(RECORDING_FILE_PATH):
+            os.remove(RECORDING_FILE_PATH)
+            print(f"{RECORDING_FILE_PATH} has been deleted.")
+        else:
+            print("The file does not exist.")
 
 
 if __name__ == "__main__":

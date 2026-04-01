@@ -1,3 +1,5 @@
+from threading import Lock
+
 # from openai import OpenAI
 
 # Toggle: True = OpenAI Whisper API, False = local whisper model
@@ -8,15 +10,19 @@ OPENAI_API_KEY = None  # or set directly: OPENAI_API_KEY = "sk-..."
 
 # Local whisper model (loaded only when USE_OPENAI_API is False)
 _local_model = None
+_local_model_lock = Lock()
 
+RECORDING_FILE_PATH = 'recording.wav'
 
 def _get_local_model():
     global _local_model
     if _local_model is None:
-        import whisper
-        print("Loading Whisper model (local)...")
-        _local_model = whisper.load_model("small", device="cuda")
-        print("Model loaded")
+        with _local_model_lock:
+            if _local_model is None:
+                import whisper
+                print("Loading Whisper model (local)...")
+                _local_model = whisper.load_model("small", device="cuda")
+                print("Model loaded")
     return _local_model
 
 
@@ -27,7 +33,18 @@ class SpeechToText:
         self.use_openai_api = use_openai_api if use_openai_api is not None else USE_OPENAI_API
         self._client = OpenAI(api_key=OPENAI_API_KEY) if (self.use_openai_api and OPENAI_API_KEY) else None
 
-    def transcribe(self, audio_data="recording.wav"):
+    def preload(self):
+        if self.use_openai_api:
+            if not self._client:
+                raise ValueError("OPENAI_API_KEY is not set. Set the global or OPENAI_API_KEY env var.")
+            print("Speech-to-text API client ready.")
+            return
+
+        print("Preloading local speech-to-text model...")
+        _get_local_model()
+        print("Speech-to-text model ready.")
+
+    def transcribe(self, audio_data=RECORDING_FILE_PATH):
         """
         Transcribe an audio file to text using either the OpenAI Whisper API or a local Whisper model.
 
