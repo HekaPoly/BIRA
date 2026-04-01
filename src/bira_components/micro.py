@@ -58,6 +58,7 @@ class Micro:
                 print(f"Current volume: {volume:.3f}")
                 if volume >= threshold:
                     print(f"Command detected with volume: {volume:.3f}")
+                    self._stop_recording()
                     break
 
     def record(self):
