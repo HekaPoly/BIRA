@@ -29,12 +29,27 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _parse_first_json(text: str) -> dict:
-    """Parse the first complete JSON object from a string."""
+def _parse_first_json(text: str):
+    """Parse the first complete JSON value ({...} or [...]) from a string."""
     text = text.strip()
-    start = text.find("{")
+    object_start = text.find("{")
+    array_start = text.find("[")
+
+    if object_start == -1 and array_start == -1:
+        raise json.JSONDecodeError("No JSON value found", text, 0)
+
+    if object_start == -1:
+        start = array_start
+    elif array_start == -1:
+        start = object_start
+    else:
+        start = min(object_start, array_start)
+
     if start == -1:
-        raise json.JSONDecodeError("No JSON object found", text, 0)
+        raise json.JSONDecodeError("No JSON value found", text, 0)
+
+    opener = text[start]
+    closer = "}" if opener == "{" else "]"
 
     depth = 0
     in_string = False
@@ -57,14 +72,14 @@ def _parse_first_json(text: str) -> dict:
             in_string = True
             quote = char
             continue
-        if char == "{":
+        if char == opener:
             depth += 1
-        elif char == "}":
+        elif char == closer:
             depth -= 1
             if depth == 0:
                 return json.loads(text[start : index + 1])
 
-    raise json.JSONDecodeError("Unbalanced braces", text, start)
+    raise json.JSONDecodeError("Unbalanced JSON delimiters", text, start)
 
 
 SYSTEM_BIRA = """
@@ -85,7 +100,7 @@ MODE DECISION TREE (APPLY IN ORDER):
    → NO: Continue to step 3.
 
 3. ACTION CLARITY CHECK: Can you understand what ACTION the user wants?
-   (e.g., pick, grab, bring, fetch, move, place, etc.)
+    (e.g., pick, grab, bring, fetch, move, place, give/donne, take/prends, bring/apporte, etc.)
    → NO: Set mode='repeat'. Respond: "I'm sorry, I couldn't understand the action you want. Could you repeat?"
    → YES: Continue to step 4.
 
@@ -130,15 +145,15 @@ IMPORTANT CONSTRAINTS:
 OUTPUT FORMAT:
 ═══════════════════════════════════════════════════════════════
 Always return STRICTLY VALID JSON, even if some fields are null or empty.
-Required structure:
-[{
+Required structure (single JSON object, not an array):
+{
   "response": "...",
-  "mode": "confirmation" | "clarification" | "repeat" | "stop",
-    "request_scope": "in_scope" | "out_of_scope",
-  "selected_candidate_index": <int> | null,
-  "selected_label": "<object_name_from_detected_list>" | null,
-  "selected_label_id": <int> | null
-}]
+    "mode": "confirmation" or "clarification" or "repeat" or "stop",
+    "request_scope": "in_scope" or "out_of_scope",
+    "selected_candidate_index": integer or null,
+    "selected_label": "<object_name_from_detected_list>" or null,
+    "selected_label_id": integer or null
+}
 """
 
 
@@ -146,7 +161,7 @@ class SLM_Manager:
     def __init__(
         self,
         model_name: str = "qwen3:1.7b",
-        max_new_tokens: int = 80,
+        max_new_tokens: int = 500,
         temperature: float = 0.3,
         mode: str = "local",
         api_key: Optional[str] = None,
@@ -178,6 +193,7 @@ class SLM_Manager:
         self.trt_engine: Optional[Any] = None
         self.trt_ready = False
         self.model_loaded = False
+        self.debug = _env_flag("SLM_DEBUG", default=False)
 
         if mode == "cloud":
             if not api_key:
@@ -221,6 +237,10 @@ class SLM_Manager:
             if not self.tensorrt_fallback_to_ollama:
                 raise RuntimeError(f"TensorRT initialization failed: {exc}") from exc
             print(f"TensorRT unavailable ({exc}). Falling back to Ollama.")
+
+    def _debug_log(self, message: str) -> None:
+        if self.debug:
+            print(f"[SLM_DEBUG] {message}")
 
     def _warmup_tensorrt_backend(self) -> None:
         if not self.trt_ready or not self.trt_engine:
@@ -330,6 +350,7 @@ class SLM_Manager:
             "set request_scope='out_of_scope' and keep mode='clarification'. "
             "When selecting one object, prefer returning selected_candidate_index. "
             "If you still cannot uniquely choose one object, ask a clarification question and keep mode='clarification'. "
+            "Return ONLY one JSON object. Do not return markdown, explanation text, or arrays. "
             "Respond in JSON according to the rules."
         )
 
@@ -407,20 +428,55 @@ class SLM_Manager:
             }
 
         self.prompt = self._build_prompt(transcription, detections, candidates)
+        self._debug_log(
+            "prompt_ready "
+            f"chars={len(self.prompt)} "
+            f"transcription={repr((transcription or '')[:120])} "
+            f"detections_count={len(detections or [])} "
+            f"candidates_count={len(candidates or [])}"
+        )
+        self._debug_log(f"prompt_preview={repr(self.prompt[:260])}")
         raw_response = self.generate_response(self.prompt)
 
         try:
             response = self._parse_model_response(raw_response)
         except (json.JSONDecodeError, ValueError) as err:
             print("SLM JSON parse error:", err)
-            response = {
-                "response": "I didn't understand. Could you repeat?",
-                "mode": "repeat",
-                "request_scope": "in_scope",
-                "selected_label": None,
-                "selected_label_id": None,
-                "selected_candidate_index": None,
-            }
+            print("SLM raw response:", repr(raw_response))
+            fallback_text = str(raw_response or "").strip()
+            if fallback_text:
+                response = {
+                    "response": fallback_text,
+                    "mode": "clarification",
+                    "request_scope": "in_scope",
+                    "selected_label": None,
+                    "selected_label_id": None,
+                    "selected_candidate_index": None,
+                }
+            else:
+                response = {
+                    "response": "I didn't understand. Could you repeat?",
+                    "mode": "repeat",
+                    "request_scope": "in_scope",
+                    "selected_label": None,
+                    "selected_label_id": None,
+                    "selected_candidate_index": None,
+                }
+
+        # Guardrail: if user utterance is non-empty and objects are available,
+        # avoid falling back to repeat loops unless input is truly unintelligible.
+        if (
+            response.get("mode") == "repeat"
+            and transcription
+            and str(transcription).strip()
+            and detections
+        ):
+            response["mode"] = "clarification"
+            if not str(response.get("response") or "").strip() or "repeat" in str(response.get("response", "")).lower():
+                response["response"] = (
+                    "I understood your request, but I need more details or I cannot find that exact object. "
+                    "Could you specify which one you mean?"
+                )
 
         if response["mode"] == "stop":
             self.reset_conversation()
@@ -512,6 +568,27 @@ class SLM_Manager:
     def preload(self) -> None:
         self.load_model()
 
+    @staticmethod
+    def _extract_ollama_message(response) -> tuple[str, str, str]:
+        """Return (content, thinking, done_reason) from dict-like or Pydantic Ollama responses."""
+        data = response.model_dump() if hasattr(response, "model_dump") else response
+        if not isinstance(data, dict):
+            return "", "", ""
+
+        message = data.get("message", {})
+        if hasattr(message, "model_dump"):
+            message = message.model_dump()
+
+        if isinstance(message, dict):
+            content = str(message.get("content") or "")
+            thinking = str(message.get("thinking") or "")
+        else:
+            content = str(getattr(message, "content", "") or "")
+            thinking = str(getattr(message, "thinking", "") or "")
+
+        done_reason = str(data.get("done_reason") or "")
+        return content, thinking, done_reason
+
     def generate_response(self, prompt: str) -> str:
         self.history.append({"role": "user", "content": prompt})
 
@@ -536,13 +613,87 @@ class SLM_Manager:
         response = self.client.chat(
             model=self.model_name,
             messages=self.history,
+            format="json",
             options={
                 "temperature": self.temperature,
                 "num_predict": self.max_new_tokens,
-                "format": "json",
             },
         )
-        return response["message"]["content"]
+        content, thinking, done_reason = self._extract_ollama_message(response)
+        self._debug_log(
+            "chat_json "
+            f"done_reason={done_reason or 'n/a'} "
+            f"content_len={len(content)} "
+            f"thinking_len={len(thinking)}"
+        )
+        if content.strip():
+            return content
+
+        # qwen3 can spend many tokens in `thinking` before writing assistant `content`.
+        # If generation stopped due to token limit, retry once with a larger budget.
+        if done_reason == "length":
+            boosted_tokens = max(self.max_new_tokens * 4, 800)
+            retry_long = self.client.chat(
+                model=self.model_name,
+                messages=self.history,
+                format="json",
+                options={
+                    "temperature": self.temperature,
+                    "num_predict": boosted_tokens,
+                },
+            )
+            long_content, long_thinking, _ = self._extract_ollama_message(retry_long)
+            _, _, long_done_reason = self._extract_ollama_message(retry_long)
+            self._debug_log(
+                "chat_json_retry_long "
+                f"num_predict={boosted_tokens} "
+                f"done_reason={long_done_reason or 'n/a'} "
+                f"content_len={len(long_content)} "
+                f"thinking_len={len(long_thinking)}"
+            )
+            if long_content.strip():
+                return long_content
+            if long_thinking.strip():
+                return long_thinking
+
+        # Some model/backends can return empty content when strict JSON mode is enforced.
+        # Retry once without forced JSON output, then let the parser recover the first JSON value.
+        print("SLM warning: empty chat response in JSON mode, retrying without forced JSON format.")
+        retry = self.client.chat(
+            model=self.model_name,
+            messages=self.history,
+            options={
+                "temperature": self.temperature,
+                "num_predict": self.max_new_tokens,
+            },
+        )
+        retry_content, retry_thinking, retry_done_reason = self._extract_ollama_message(retry)
+        self._debug_log(
+            "chat_no_json_retry "
+            f"done_reason={retry_done_reason or 'n/a'} "
+            f"content_len={len(retry_content)} "
+            f"thinking_len={len(retry_thinking)}"
+        )
+        if retry_content.strip():
+            return retry_content
+        if retry_thinking.strip():
+            return retry_thinking
+
+        # Last fallback using generate endpoint with the same prompt.
+        fallback = self.client.generate(
+            model=self.model_name,
+            prompt=prompt,
+            options={
+                "temperature": self.temperature,
+                "num_predict": self.max_new_tokens,
+            },
+        )
+        fallback_content = fallback.get("response", "")
+        self._debug_log(
+            "generate_fallback "
+            f"response_len={len(str(fallback_content or ''))}"
+        )
+        return str(fallback_content or "")
 
 
 if __name__ == "__main__":
