@@ -81,6 +81,7 @@ class BiraController:
         self.slm_manager.set_detections(
             detection_labels=context.detection_labels,
             detected_objects=detected_objects,
+            computer_vision=self.computer_vision,
         )
 
         return self.slm_manager.run_inference()

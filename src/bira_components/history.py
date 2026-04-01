@@ -6,7 +6,6 @@ import ast
 from datetime import datetime
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from cv_viewer import labels
 
 root = Path(__file__).resolve().parents[1]
 target = root / "logs"
@@ -31,7 +30,14 @@ def write_json(obj_output) :
         f.write('\n')
         f.close()
 
-def write_history(objects) :
+def write_history(objects, computer_vision=None):
+    """
+    Write detected objects to history log.
+    
+    Args:
+        objects: List of detected object data
+        computer_vision: ComputerVision instance (required for label name resolution)
+    """
     objects_out = []
 
     for obj in objects:
@@ -39,7 +45,11 @@ def write_history(objects) :
         if np.isnan(obj.position).any(): continue
      
         position = list(obj.position)
-        label = labels.labelDict[int(obj.raw_label)] 
+        # Use ComputerVision to get label name, or fallback to raw label if not available
+        if computer_vision:
+            label = computer_vision.get_label_name(int(obj.raw_label))
+        else:
+            label = f"label_{int(obj.raw_label)}"
         dimensions = list(obj.dimensions)
         
         obj_output = ObjectOutput(label=label, position=position, dimensions=dimensions) 

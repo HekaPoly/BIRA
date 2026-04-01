@@ -7,7 +7,6 @@ import json
 import os
 import subprocess
 
-from cv_viewer import labels
 from ollama import Client
 
 try:
@@ -217,20 +216,30 @@ class SLM_Manager:
         self,
         detection_labels: Optional[list[int]] = None,
         detected_objects: Optional[list] = None,
+        computer_vision=None,
     ) -> None:
+        """
+        Set the detected objects and resolve their labels to human-readable names.
+        
+        Args:
+            detection_labels: List of YOLO label IDs
+            detected_objects: List of detected objects with raw_label attribute
+            computer_vision: ComputerVision instance for label name resolution
+        """
         resolved: list[str] = []
 
-        if detection_labels:
-            resolved.extend(labels.labelDict[label_id] for label_id in detection_labels if label_id in labels.labelDict)
+        if detection_labels and computer_vision:
+            resolved.extend(
+                computer_vision.get_label_name(label_id) 
+                for label_id in detection_labels
+            )
 
-        if detected_objects:
+        if detected_objects and computer_vision:
             for obj in detected_objects:
                 raw = getattr(obj, "raw_label", None)
                 if raw is None:
                     continue
-                key = int(raw)
-                if key in labels.labelDict:
-                    resolved.append(labels.labelDict[key])
+                resolved.append(computer_vision.get_label_name(int(raw)))
 
         self.detections = list(dict.fromkeys(resolved)) if resolved else None
 
