@@ -7,15 +7,17 @@
 # example https://dlib.net/face_landmark_detection.py.html
 # the facial landmark model used can be find on https://dlib.net/files/ and is named
 # shape_predictor_68_face_landmarks.dat.bz2 other model exits
-
 # I aslo found another way to do it using MediaPipe Face Mesh
 # the missing methods can be found here https://github.com/PyImageSearch/imutils
+# emotion model link https://github.com/niebardzo/Emotions
 
 import numpy as np
 import dlib
 import cv2
 import pyzed.sl as sl
 from camera import Camera
+from joblib import load
+from utils.image_processing import Face
 
 def convert_dlib_landmarks_to_np_array(landmarks) :
     points = []
@@ -34,7 +36,9 @@ if (__name__ == "__main__"):
     #load the pretrained face detector from dlib
     detector = dlib.get_frontal_face_detector()
     #load the facial landmark predictor (97 358 KB)
-    predictor = dlib.shape_predictor("/path-to-the-pretrained-model")
+    predictor = dlib.shape_predictor("../models/shape_predictor_68_face_landmarks.dat")
+    #load the emotion model
+    emotion_model = load('../models/emotion.joblib')
 
     # we need to aquire the image with the zed sdk
     myCamera = Camera()
@@ -47,23 +51,22 @@ if (__name__ == "__main__"):
 
     # resizing the image can positvely impact the computing time
     #convert the image to grayscale
-    grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # upscale the image and get BB of the face can also work with RGB image
-    face_BB = detector(grayScale_image, 1)
+    while 1:
+        grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # upscale the image and get BB of the face can also work with RGB image
+        face_BB = detector(grayScale_image, 1)
 
-    for BB in face_BB:
-        #get the facial landmarks coordinates (x,y)
-        landmarks = predictor(grayScale_image, BB)
-        #convert to np array
-        landmarks = convert_dlib_landmarks_to_np_array(landmarks)
-        #convert to openCv BB
-        (x, y, w, h) = convert_dlib_BB_to_openCV_BB(BB)
-        #draw the BB
-        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        #draw the landmarks
-        for (x, y) in landmarks:
-            cv2.circle(image, (x, y), 1, (0, 0, 255), -1)    
-    #show the result
-    cv2.imshow("FaceID", image)
-    cv2.waitKey(0)
+        for BB in face_BB:
+            face = Face(grayScale_image, BB, predictor)
+            prediction = emotion_model.predict([face.extract_features()])
+            #get the facial landmarks coordinates (x,y)
+            #convert to openCv BB
+            (x, y, w, h) = convert_dlib_BB_to_openCV_BB(BB)
+            #draw the BB
+            cv2.rectangle(image, (x,y), (x+w, y+h), (0,255,0),2)
+            cv2.putText(image, "###{}".format(emotion_model.le.inverse_transform(prediction)[0]), (x - 10, y - 10),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        #show the result
+        cv2.imshow("Frame", image)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
     cv2.destroyAllWindows()
