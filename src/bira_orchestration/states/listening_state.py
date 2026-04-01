@@ -11,7 +11,6 @@ class ListeningState(State):
         self.bira_manager.prepare_listening()
 
     def _handle(self):
-        # TODO: Implement actual listening logic
         transcription = self.bira_manager.controller.listen()
         self.bira_manager.add_user_input(transcription)
         self.bira_manager.get_data().listening_code = ListeningCode.SUCCESS

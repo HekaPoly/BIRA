@@ -11,7 +11,6 @@ class VisionState(State):
         self.bira_manager.prepare_vision()
 
     def _handle(self):
-        # TODO: Implement actual vision logic
         sl_object, detection_labels = self.bira_manager.controller.vision()
         context = self.bira_manager.get_data()
         context.objects_detected = sl_object.object_list
