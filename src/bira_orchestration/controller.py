@@ -55,6 +55,7 @@ class BiraController:
         sleep(2)
     
     def speak(self, text):
+        print(f"Bira Speaking: {text}")
         self.text_to_speech.speak(text)
     
     def prompt_slm(self, context):
