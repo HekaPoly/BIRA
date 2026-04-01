@@ -12,8 +12,8 @@ class BiraContext:
     detection_labels: list[int] = field(default_factory=list)
     user_inputs: list[str] = field(default_factory=list)
     feedbacks: list[str] = field(default_factory=list)
-    object_selected: object | None = None
-
+    object_selected: sl.ObjectData | None = None
+    
     listening_code: ListeningCode = ListeningCode.NO_RESPONSE
     vision_code: VisionCode = VisionCode.NO_RESPONSE
     planification_code: PlanificationCode = PlanificationCode.NO_RESPONSE
