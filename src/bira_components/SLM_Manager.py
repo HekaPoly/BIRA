@@ -146,7 +146,7 @@ class SLM_Manager:
     def __init__(
         self,
         model_name: str = "qwen3:1.7b",
-        max_new_tokens: int = 500,
+        max_new_tokens: int = 80,
         temperature: float = 0.3,
         mode: str = "local",
         api_key: Optional[str] = None,
