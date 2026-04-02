@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 from ollama import Client
+
+try:
+    from bira_components.tensorRT import TensorRTInferenceEngine
+except Exception:
+    TensorRTInferenceEngine = None
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -74,6 +80,7 @@ class SLM_Manager:
         temperature: float = 0.3,
         mode: str = "local",
         api_key: Optional[str] = None,
+        tensorrt_engine_dir: Optional[str] = None,
     ):
         """
         Initialize SLM_Manager.
@@ -94,6 +101,12 @@ class SLM_Manager:
         self.debug = _env_flag("SLM_DEBUG", default=False)
         self.num_predict = int(os.getenv("SLM_NUM_PREDICT", "900"))
         self.pending_label: Optional[str] = None
+        # Policy: always prefer TensorRT when available in local mode.
+        self.prefer_tensorrt = True
+        default_engine_dir = Path(__file__).resolve().parent / "tensorRT" / "tensorrt_models" / "engines"
+        self.tensorrt_engine_dir = Path(tensorrt_engine_dir or default_engine_dir)
+        self.trt_engine = None
+        self.trt_ready = False
         self.response_schema = {
             "type": "object",
             "properties": {
@@ -133,10 +146,38 @@ class SLM_Manager:
         else:
             self.client = Client(host="http://localhost:11434")
 
+        if self.mode != "local" and self.prefer_tensorrt:
+            print("TensorRT is only available in local mode. Falling back to Ollama.")
+            self.prefer_tensorrt = False
+
+        if self.prefer_tensorrt:
+            if TensorRTInferenceEngine is None:
+                print("TensorRT support is unavailable. Falling back to Ollama.")
+                self.prefer_tensorrt = False
+            else:
+                self._init_tensorrt_engine()
+
     def _debug_log(self, message: str) -> None:
         """Log debug message if SLM_DEBUG is enabled."""
         if self.debug:
             print(f"[SLM_DEBUG] {message}")
+
+    def _init_tensorrt_engine(self) -> None:
+        try:
+            self.trt_engine = TensorRTInferenceEngine(engine_dir=str(self.tensorrt_engine_dir))
+            self.trt_ready = bool(self.trt_engine.load_engine())
+
+            if self.trt_ready:
+                print(f"TensorRT ready (engine: {self.tensorrt_engine_dir})")
+                return
+
+            self.trt_engine = None
+            # If TensorRT is not detected/ready, fallback to Ollama.
+            print(f"TensorRT engine not ready in {self.tensorrt_engine_dir}. Falling back to Ollama.")
+        except Exception as exc:
+            self.trt_ready = False
+            self.trt_engine = None
+            print(f"TensorRT unavailable ({exc}). Falling back to Ollama.")
 
     def reset_conversation(self) -> None:
         """Reset conversation history."""
@@ -449,6 +490,19 @@ class SLM_Manager:
         message = self._as_dict(data.get("message", {}))
         return str(message.get("thinking") or ""), str(message.get("content") or "")
 
+    def _chat_tensorrt(self) -> tuple[str, str]:
+        if not (self.prefer_tensorrt and self.trt_ready and self.trt_engine):
+            return "", ""
+
+        response = self.trt_engine.chat(
+            messages=self.history,
+            max_new_tokens=self.num_predict,
+            temperature=self.temperature,
+        )
+        data = self._as_dict(response)
+        message = self._as_dict(data.get("message", {}))
+        return "", str(message.get("content") or "")
+
     def run_inference(self) -> dict:
         """Run inference on current transcription and detections."""
         transcription = self.transcription
@@ -488,41 +542,54 @@ class SLM_Manager:
 
         self.history.append({"role": "user", "content": prompt})
 
-        # Call Ollama with structured output and stream thinking/content chunks.
+        # Prefer TensorRT when available; fallback to Ollama streaming.
         try:
-            stream = self.client.chat(
-                model=self.model_name,
-                messages=self.history,
-                stream=True,
-                think=True,
-                format=self.response_schema,
-                options={"temperature": self.temperature, "num_predict": self.num_predict},
-            )
-
             thinking = ""
             content = ""
-            in_thinking = False
 
-            for chunk in stream:
-                chunk_data = self._as_dict(chunk)
-                message = self._as_dict(chunk_data.get("message", {}))
-                chunk_thinking = str(message.get("thinking") or "")
-                chunk_content = str(message.get("content") or "")
+            if self.prefer_tensorrt and self.trt_ready and self.trt_engine:
+                try:
+                    _, trt_content = self._chat_tensorrt()
+                    content = trt_content or ""
+                    self._debug_log(f"tensorrt_response_len={len(content)}")
+                except Exception as exc:
+                    self._debug_log(f"tensorrt_error={exc}")
+                    # Runtime TensorRT failures should not silently fallback when TensorRT is detected.
+                    raise
 
-                if chunk_thinking:
-                    if self.debug and not in_thinking:
-                        print("[SLM_DEBUG] Thinking:")
-                        in_thinking = True
-                    if self.debug:
-                        print(chunk_thinking, end="", flush=True)
-                    thinking += chunk_thinking
-                elif chunk_content:
-                    if self.debug and in_thinking:
-                        print("\n[SLM_DEBUG] Answer:")
-                        in_thinking = False
-                    if self.debug:
-                        print(chunk_content, end="", flush=True)
-                    content += chunk_content
+            # If TensorRT is unavailable or returned empty, use Ollama stream.
+            if not content.strip():
+                stream = self.client.chat(
+                    model=self.model_name,
+                    messages=self.history,
+                    stream=True,
+                    think=True,
+                    format=self.response_schema,
+                    options={"temperature": self.temperature, "num_predict": self.num_predict},
+                )
+
+                in_thinking = False
+
+                for chunk in stream:
+                    chunk_data = self._as_dict(chunk)
+                    message = self._as_dict(chunk_data.get("message", {}))
+                    chunk_thinking = str(message.get("thinking") or "")
+                    chunk_content = str(message.get("content") or "")
+
+                    if chunk_thinking:
+                        if self.debug and not in_thinking:
+                            print("[SLM_DEBUG] Thinking:")
+                            in_thinking = True
+                        if self.debug:
+                            print(chunk_thinking, end="", flush=True)
+                        thinking += chunk_thinking
+                    elif chunk_content:
+                        if self.debug and in_thinking:
+                            print("\n[SLM_DEBUG] Answer:")
+                            in_thinking = False
+                        if self.debug:
+                            print(chunk_content, end="", flush=True)
+                        content += chunk_content
 
             if self.debug and (thinking or content):
                 print("")
@@ -601,6 +668,20 @@ class SLM_Manager:
 
     def load_model(self) -> None:
         """Check that model is available (simple validation)."""
+        if self.prefer_tensorrt and self.trt_ready and self.trt_engine:
+            try:
+                self.trt_engine.chat(
+                    messages=[{"role": "user", "content": "Reply with {}."}],
+                    max_new_tokens=8,
+                    temperature=0.0,
+                )
+                self._debug_log("TensorRT backend is ready")
+                return
+            except Exception as exc:
+                self._debug_log(f"TensorRT warmup failed: {exc}")
+                # TensorRT detected but failed warmup: surface the failure.
+                raise RuntimeError(f"TensorRT warmup failed: {exc}") from exc
+
         try:
             # Quick warmup call
             result = self.client.chat(
