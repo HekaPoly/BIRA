@@ -1,11 +1,13 @@
 # revoir la documentation disponible sur OpenCV
 # revoir les chiffres magiques et les adapter si nécessaire
+from camera import Camera
 import cv2
 import numpy as np
 
 class GlassDetection:
     def __init__(self, image_path):
-        self.image_path = image_path
+        #self.image_path = image_path
+        #self.image = cv2.imread(image_path)
         self.image = cv2.imread(image_path)
         
         if self.image is None:
@@ -100,9 +102,36 @@ class GlassDetection:
 
 if __name__ == "__main__":
     print("Glass Detection")
-    try:
-        detectGlass = GlassDetection("PATH_TO_IMAGE.png")
-        result = detectGlass.is_glass_obj_pres()
-        print(f"Is a glass object present?\n{result}")
-    except ValueError as e:
-        print(f"Error: {e}")
+    # try:
+    #     detectGlass = GlassDetection("PATH_TO_IMAGE.png")
+    #     result = detectGlass.is_glass_obj_pres()
+    #     print(f"Is a glass object present?\n{result}")
+    # except ValueError as e:
+    #     print(f"Error: {e}")
+        
+    print("Camera test starting")
+    cam = Camera()
+    # print("TEST1")
+    cam.open()
+    # print("TEST2")
+    with cam:
+        while True:
+            if (cam.grab()):
+                frame = cam.get_frame()
+                if frame is not None:
+                    detectGlass = GlassDetection(frame)
+                    result = detectGlass.is_glass_obj_pres()
+                    print(f"Is a glass object present?\n{result}")
+                    print("Image retrieved successfully.")
+                    cv2.imshow("Camera Frame left", cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB))
+                
+            key = cv2.waitKey(1)
+            if key == 27:  # Press 'ESC' to exit
+                break
+    
+    if cam.get_frame() is None:
+        print("Camera released successfully.")
+    else :
+        print("Camera release failed.")
+    
+    cv2.destroyAllWindows()
