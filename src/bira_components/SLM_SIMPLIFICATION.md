@@ -2,15 +2,19 @@
 
 ## Build the model
 
+** To modify the behavior of the SLM, you can change the content of the Modelfile. Make sure however to run the following command when you're done. **
+
 ```bash
-cd /Users/home/Projets/BIRA
-ollama create bira-assistant -f Modelfile
+// From root:
+ollama create bira-assistant -f Modelfile // Necessary because we don't use system Prompt anymore. Everytime you modify Modelfile, please run this command again.
 ```
+More informations on the modelfile can be found here: https://docs.ollama.com/modelfile
+
 
 ## Run BIRA
 
 ```bash
-cd /Users/home/Projets/BIRA/src
+// From src:
 python main.py --mock --SLM_DEBUG // SLM_DEBUG to see details from how the SLM ats
 ```
 
