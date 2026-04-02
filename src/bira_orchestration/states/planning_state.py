@@ -73,9 +73,9 @@ class PlanningState(State):
             return
 
         if mode == "confirmation":
-            # SLM guarantees exactly 1 match when returning confirmation
             matched_objects = self._resolve_selection(context, response)
             if matched_objects:  # Safety check: confirm object exists
+                selected_candidate_index = response.get("selected_candidate_index")
                 context.object_selected = matched_objects[0]
                 self.bira_manager.add_feedback(feedback)
                 context.planification_code = PlanificationCode.SUCCESS

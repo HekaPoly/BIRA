@@ -78,13 +78,8 @@ class BiraController:
     
     def prompt_slm(self, context):
         if context.user_inputs:
-            if context.planification_code in {
-                PlanificationCode.REPEAT_REQUEST,
-                PlanificationCode.NEED_MORE_INFO,
-            }:
-                user_input = " | ".join(context.user_inputs[-2:])
-            else:
-                user_input = context.user_inputs[-1]
+            # Keep only the latest user utterance here; dialog continuity is handled by SLM history.
+            user_input = context.user_inputs[-1]
         else:
             user_input = None
         detected_objects = context.objects_detected if context.objects_detected else None
