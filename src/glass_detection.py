@@ -4,14 +4,44 @@ import cv2
 import numpy as np
 
 def get_depth_from_camera(cam):
+    """Retrieves the depth map directly from the ZED camera object.
+
+    Bypasses the Camera wrapper by accessing the underlying sl.Camera instance,
+    since the Camera module does not expose a get_depth() method.
+
+    Parameters:
+        cam (Camera): The Camera singleton instance.
+    Returns:
+        np.ndarray: A float32 array of depth values in meters, or None if retrieval fails.
+    """
     zed = cam.get_camera()
     depth_mat = sl.Mat()
     if zed.retrieve_measure(depth_mat, sl.MEASURE.DEPTH) == sl.ERROR_CODE.SUCCESS:
         return depth_mat.get_data().copy()
+
     return None
 
 class GlassDetection:
+    """Detects the presence of glass objects in an image using depth and color heuristics.
+
+    Uses two complementary signals:
+        - Depth irregularities: invalid pixels (NaN/inf) and sharp discontinuities
+          in the ZED depth map, which are characteristic of transparent surfaces.
+        - Color irregularities: specular reflections, characteristic glass tints
+          (green, blue, white), and weak edge structure typical of transparent objects.
+
+    If no depth map is provided, falls back to a brightness-based heuristic.
+    """
     def __init__(self, image, depth_map=None):
+        """Initializes GlassDetection with an image and an optional depth map.
+
+        Parameters:
+            image (str or np.ndarray): Path to an image file, or a BGR numpy array.
+            depth_map (np.ndarray, optional): Float32 depth map in meters from the ZED camera.
+                                              If None, brightness fallback is used for depth analysis.
+        Raises:
+            ValueError: If the image path is invalid or the type is unsupported.
+        """
         if isinstance(image, str):
             self.image = cv2.imread(image)
             if self.image is None:
@@ -24,11 +54,29 @@ class GlassDetection:
 
     # TODO: Revoir les chiffres magiques et les adapter
     def is_depth_irreg(self):
+        """Detects depth irregularities indicative of a glass surface.
+
+        Delegates to _depth_map_irreg() if a depth map is available,
+        otherwise falls back to _brightness_fallback().
+
+        Returns:
+            bool: True if depth irregularities consistent with glass are detected.
+        """
         if self.depth_map is not None:
             return self._depth_map_irreg()
+
         return self._brightness_fallback()
 
     def _depth_map_irreg(self):
+        """Analyzes the ZED depth map for glass-specific depth artifacts.
+
+        Glass surfaces cause the ZED stereo matching to fail, producing NaN/inf
+        pixels and abrupt depth discontinuities at object boundaries.
+
+        Returns:
+            bool: True if the depth map contains a suspicious ratio of invalid pixels
+                  and sharp discontinuities consistent with a transparent surface.
+        """
         depth = self.depth_map
 
         invalid_mask = ~np.isfinite(depth)
@@ -44,6 +92,14 @@ class GlassDetection:
         return has_invalid_pixels and has_discontinuities
 
     def _brightness_fallback(self):
+        """Estimates depth irregularities from brightness distribution when no depth map is available.
+
+        Assumes that a glass object placed on a surface will produce a characteristic
+        gradient: a bright, uniform top zone and a darker bottom zone.
+
+        Returns:
+            bool: True if the brightness pattern is consistent with a glass-like gradient.
+        """
         # TODO: Revoir le ratio (car il s'applique mieux aux petits objets)
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         height, width = gray.shape
@@ -64,13 +120,24 @@ class GlassDetection:
         middle_is_light = middle_brightness > 140
 
         top_variance = np.var(top_zone)
-        # middle_variance = np.var(middle_zone)
-        # bottom_variance = np.var(bottom_zone)
         is_uniform_top = top_variance < 1000
 
         return is_darker_at_bottom and (top_is_light or middle_is_light) and is_uniform_top
 
     def are_colors_irreg(self):
+        """Detects color irregularities characteristic of glass objects.
+
+        Analyzes three glass-related color signals in HSV space:
+            - Green/blue tints at object edges (refraction artifacts)
+            - Bright white specular reflections
+            - Sparse overall color distribution (most of the object is transparent)
+
+        Also checks for weak edge structure and blurriness, which are typical
+        of transparent surfaces that don't produce strong optical contrast.
+
+        Returns:
+            bool: True if color and texture patterns are consistent with a glass object.
+        """
         hsv = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 
@@ -125,6 +192,14 @@ class GlassDetection:
         return color_presence and texture_criteria and has_sparse_colors
 
     def is_glass_obj_pres(self):
+        """Determines whether a glass object is present in the image.
+
+        Combines both depth and color heuristics: both must be True
+        to reduce false positives.
+
+        Returns:
+            bool: True if both depth and color analyses indicate a glass object.
+        """
         depth_detected = self.is_depth_irreg()
         colors_detected = self.are_colors_irreg()
 
