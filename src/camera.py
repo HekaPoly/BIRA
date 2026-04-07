@@ -122,7 +122,7 @@ if __name__ == "__main__":
     cam2 = Camera()
 
     cam.open()
-
+    print("TEST2")
     print("WOww the singleton works bro!" if cam is cam2 else "What the helly...")
     
     with cam:

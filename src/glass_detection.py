@@ -2,6 +2,7 @@ from camera import Camera
 import pyzed.sl as sl
 import cv2
 import numpy as np
+from scipy import ndimage
 
 def get_depth_from_camera(cam):
     """Retrieves the depth map directly from the ZED camera object.
@@ -62,9 +63,9 @@ class GlassDetection:
         Returns:
             bool: True if depth irregularities consistent with glass are detected.
         """
+        res = self._depth_map_irreg()
         if self.depth_map is not None:
             return self._depth_map_irreg()
-
         return self._brightness_fallback()
 
     def _depth_map_irreg(self):
@@ -78,18 +79,19 @@ class GlassDetection:
                   and sharp discontinuities consistent with a transparent surface.
         """
         depth = self.depth_map
-
+        if depth is None:
+            return False
         invalid_mask = ~np.isfinite(depth)
         invalid_ratio = np.sum(invalid_mask) / depth.size
         has_invalid_pixels = 0.03 < invalid_ratio < 0.60
 
         valid_depth = np.where(np.isfinite(depth), depth, 0).astype(np.float32)
-        depth_grad = cv2.Laplacian(valid_depth, cv2.CV_64F)
+        depth_grad = ndimage.sobel(valid_depth, axis=0) 
         total_valid = np.sum(~invalid_mask)
         sharp_disc = np.sum(np.abs(depth_grad) > 1.0)
         has_discontinuities = (sharp_disc / max(total_valid, 1)) > 0.05
 
-        return has_invalid_pixels and has_discontinuities
+        return has_invalid_pixels or has_discontinuities
 
     def _brightness_fallback(self):
         """Estimates depth irregularities from brightness distribution when no depth map is available.
@@ -200,19 +202,19 @@ class GlassDetection:
         Returns:
             bool: True if both depth and color analyses indicate a glass object.
         """
+        print("Analyzing depth irregularities...")
         depth_detected = self.is_depth_irreg()
+        print(f"Depth irregularities detected: {depth_detected}")
         colors_detected = self.are_colors_irreg()
-
-        return colors_detected and depth_detected
+        print(f"Color irregularities detected: {colors_detected}")
+        return colors_detected or depth_detected
 
 if __name__ == "__main__":
     print("========== Glass Detection ==========")
 
     print("Camera started")
     cam = Camera()
-    # print("TEST1")
     cam.open()
-    # print("TEST2")
 
     depth_warning_shown = False
 
