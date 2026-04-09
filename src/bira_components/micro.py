@@ -4,6 +4,8 @@ import sounddevice as sd
 import numpy as np
 import wave
 
+from bira_components import history as bira_history
+
 RECORDING_FILE_PATH = 'recording.wav'
 
 class Micro:
@@ -51,6 +53,7 @@ class Micro:
             None
         """
         self._start_recording()
+        bira_history.log_event("recording_wait_started", component="micro", threshold=threshold)
 
         while True:
             sd.sleep(100)
@@ -62,11 +65,23 @@ class Micro:
                 print(f"Current volume: {volume:.3f}")
                 if volume >= threshold:
                     print(f"Command detected with volume: {volume:.3f}")
+                    bira_history.log_event(
+                        "recording_threshold_reached",
+                        component="micro",
+                        threshold=threshold,
+                        volume=round(float(volume), 3),
+                    )
                     self._stop_recording()
                     break
 
     def record(self):
         print('start transcription_request')
+        bira_history.log_event(
+            "recording_requested",
+            component="micro",
+            duration_seconds=5,
+            output_file=RECORDING_FILE_PATH,
+        )
         self._record(duration=5)
         self._save_recording(RECORDING_FILE_PATH)
 
@@ -80,6 +95,7 @@ class Micro:
         """
         if self.is_recording:
             print("Recording is already in progress")
+            bira_history.log_event("recording_start_ignored", component="micro", reason="already_recording")
             return
 
         self.audio_data = []
@@ -95,6 +111,12 @@ class Micro:
         self.stream.start()
         self.is_recording = True
         print("Recording started")
+        bira_history.log_event(
+            "recording_started",
+            component="micro",
+            frequency=self.frequency,
+            device=self.device,
+        )
 
     def _get_stream(self, data, _frames, _time, status):
         """
@@ -111,6 +133,7 @@ class Micro:
         """
         if status:
             print(f"Status: {status}")
+            bira_history.log_event("recording_stream_status", component="micro", status=str(status))
         self.audio_data.append(data.copy())
 
     def _stop_recording(self):
@@ -123,6 +146,7 @@ class Micro:
         """
         if not self.is_recording:
             print("No recording in progress")
+            bira_history.log_event("recording_stop_ignored", component="micro", reason="not_recording")
             return
 
         if self.stream:
@@ -134,6 +158,14 @@ class Micro:
             self.audio_data = np.concatenate(self.audio_data)
         self.is_recording = False
         print("Recording stopped")
+        sample_count = int(len(self.audio_data)) if self.audio_data is not None else 0
+        duration_seconds = round(sample_count / self.frequency, 3) if sample_count else 0.0
+        bira_history.log_event(
+            "recording_stopped",
+            component="micro",
+            sample_count=sample_count,
+            duration_seconds=duration_seconds,
+        )
 
     def _record(self, duration=5):
         """
@@ -160,6 +192,12 @@ class Micro:
         """
         if self.audio_data is None:
             print("No recording to save")
+            bira_history.log_event(
+                "recording_save_skipped",
+                component="micro",
+                filename=filename,
+                reason="no_audio_data",
+            )
             return
 
         with wave.open(filename, "wb") as file:
@@ -168,14 +206,33 @@ class Micro:
             file.setframerate(self.frequency)
             file.writeframes(self.audio_data.tobytes())
         print(f"File saved: {filename}")
+        sample_count = int(len(self.audio_data))
+        duration_seconds = round(sample_count / self.frequency, 3) if sample_count else 0.0
+        bira_history.log_event(
+            "recording_saved",
+            component="micro",
+            filename=filename,
+            sample_count=sample_count,
+            duration_seconds=duration_seconds,
+        )
 
     @staticmethod
     def clear_recording():
         if os.path.exists(RECORDING_FILE_PATH):
             os.remove(RECORDING_FILE_PATH)
             print(f"{RECORDING_FILE_PATH} has been deleted.")
+            bira_history.log_event(
+                "recording_file_deleted",
+                component="micro",
+                filename=RECORDING_FILE_PATH,
+            )
         else:
             print("The file does not exist.")
+            bira_history.log_event(
+                "recording_file_missing",
+                component="micro",
+                filename=RECORDING_FILE_PATH,
+            )
 
 
 if __name__ == "__main__":

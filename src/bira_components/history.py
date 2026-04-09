@@ -10,8 +10,10 @@ from cv_viewer import labels
 
 root = Path(__file__).resolve().parents[1]
 target = root / "logs"
-timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-filename = target / f"{timestamp}_history.txt"
+session_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+filename = target / f"{session_timestamp}_history.txt"
+conversation_filename = target / f"{session_timestamp}_conversation.jsonl"
+events_filename = target / f"{session_timestamp}_events.jsonl"
 
 @dataclass
 class ObjectsOutput:
@@ -24,9 +26,41 @@ class ObjectOutput:
     position: list # [x, y, z]
     dimensions: list # [width, height, length]
 
+
+def _timestamp() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def _append_json_line(path: Path, payload: dict) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=True)
+        f.write("\n")
+
+
+def log_conversation(role: str, content: str, **details) -> None:
+    entry = {
+        "timestamp": _timestamp(),
+        "role": str(role),
+        "content": "" if content is None else str(content),
+    }
+    if details:
+        entry["details"] = details
+    _append_json_line(conversation_filename, entry)
+
+
+def log_event(event: str, **details) -> None:
+    entry = {
+        "timestamp": _timestamp(),
+        "event": str(event),
+    }
+    if details:
+        entry["details"] = details
+    _append_json_line(events_filename, entry)
+
 def write_json(obj_output) :
     target.mkdir(parents = True, exist_ok = True)
-    with open(filename, "a") as f:
+    with open(filename, "a", encoding="utf-8") as f:
         f.write(str(obj_output.__dict__))
         f.write('\n')
         f.close()

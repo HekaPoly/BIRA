@@ -1,5 +1,6 @@
 from bira_components.camera import Camera
 from bira_components.computer_vision import ComputerVision
+from bira_components import history as bira_history
 from bira_components.micro import Micro
 from bira_components.SLM_Manager import SLM_Manager
 from bira_components.speech_to_text import SpeechToText
@@ -19,7 +20,7 @@ class BiraController:
         self.micro = Micro()
         self.text_to_speech = TextToSpeech()
         self.speech_to_text = SpeechToText()
-        self.slm_manager = SLM_Manager(mode="local")
+        self.slm_manager = SLM_Manager(mode="local", prefer_tensorrt=True)
 
     def preload_components(self):
         preload_steps = [
@@ -42,6 +43,10 @@ class BiraController:
     def listen(self):
         self.micro.record()
         transcription = self.speech_to_text.transcribe()
+        if transcription:
+            bira_history.log_conversation("user", transcription, source="speech_to_text")
+        else:
+            bira_history.log_event("conversation_input_missing", component="controller")
         self.micro.clear_recording()
         return transcription
     
@@ -71,6 +76,7 @@ class BiraController:
     
     def speak(self, text):
         print(f"Bira Speaking: {text}")
+        bira_history.log_conversation("assistant", text, source="text_to_speech")
         self.text_to_speech.speak(text)
     
     def prompt_slm(self, context):

@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 
+from bira_components import history as bira_history
 from cv_viewer import labels
 from ollama import Client
 
@@ -139,6 +140,7 @@ class SLM_Manager:
         self.trt_engine: Optional[TensorRTInferenceEngine] = None
         self.trt_ready = False
         self.model_loaded = False
+        self.last_backend = None
 
         if mode == "cloud":
             if not api_key:
@@ -153,25 +155,42 @@ class SLM_Manager:
 
         if self.mode != "local" and self.prefer_tensorrt:
             print("TensorRT is only available in local mode. Falling back to Ollama.")
+            bira_history.log_event("tensorrt_disabled", component="slm_manager", reason="non_local_mode")
             self.prefer_tensorrt = False
 
         if self.prefer_tensorrt:
             if TensorRTInferenceEngine is None:
                 print("TensorRT support is unavailable. Falling back to Ollama.")
+                bira_history.log_event("tensorrt_unavailable", component="slm_manager", reason="import_failed")
                 self.prefer_tensorrt = False
             else:
                 self._init_tensorrt_engine()
 
     def _init_tensorrt_engine(self) -> None:
+        bira_history.log_event(
+            "tensorrt_load_started",
+            component="slm_manager",
+            engine_dir=str(self.tensorrt_engine_dir),
+        )
         try:
             self.trt_engine = TensorRTInferenceEngine(engine_dir=str(self.tensorrt_engine_dir))
             self.trt_ready = bool(self.trt_engine.load_engine())
 
             if self.trt_ready:
+                bira_history.log_event(
+                    "tensorrt_load_succeeded",
+                    component="slm_manager",
+                    engine_dir=str(self.tensorrt_engine_dir),
+                )
                 print(f"TensorRT ready (engine: {self.tensorrt_engine_dir})")
                 return
 
             self.trt_engine = None
+            bira_history.log_event(
+                "tensorrt_load_unavailable",
+                component="slm_manager",
+                engine_dir=str(self.tensorrt_engine_dir),
+            )
             if not self.tensorrt_fallback_to_ollama:
                 raise RuntimeError(f"No TensorRT engine available in {self.tensorrt_engine_dir}")
 
@@ -179,6 +198,12 @@ class SLM_Manager:
         except Exception as exc:
             self.trt_ready = False
             self.trt_engine = None
+            bira_history.log_event(
+                "tensorrt_load_failed",
+                component="slm_manager",
+                engine_dir=str(self.tensorrt_engine_dir),
+                error=str(exc),
+            )
             if not self.tensorrt_fallback_to_ollama:
                 raise RuntimeError(f"TensorRT initialization failed: {exc}") from exc
             print(f"TensorRT unavailable ({exc}). Falling back to Ollama.")
@@ -274,9 +299,11 @@ class SLM_Manager:
             response = self._parse_model_response(raw_response)
         except (json.JSONDecodeError, ValueError) as err:
             print("SLM JSON parse error:", err)
+            bira_history.log_event("slm_response_parse_failed", component="slm_manager", error=str(err))
             response = {"response": "I didn't understand. Could you repeat?", "mode": "clarification"}
 
         if response["mode"] == "stop":
+            bira_history.log_event("conversation_reset", component="slm_manager", reason="stop_mode")
             self.reset_conversation()
 
         return response
@@ -368,6 +395,7 @@ class SLM_Manager:
 
     def generate_response(self, prompt: str) -> str:
         self.history.append({"role": "user", "content": prompt})
+        self.last_backend = None
 
         if self.prefer_tensorrt and self.trt_ready and self.trt_engine:
             try:
@@ -378,12 +406,15 @@ class SLM_Manager:
                 )
                 content = response.get("message", {}).get("content", "")
                 if content:
+                    self.last_backend = "TensorRT"
+                    self.history.append({"role": "assistant", "content": content})
                     return content
 
                 if not self.tensorrt_fallback_to_ollama:
                     raise RuntimeError("TensorRT returned an empty response.")
             except Exception as exc:
                 print(f"TensorRT failed ({exc}).")
+                bira_history.log_event("tensorrt_inference_failed", component="slm_manager", error=str(exc))
                 if not self.tensorrt_fallback_to_ollama:
                     raise
 
@@ -396,7 +427,10 @@ class SLM_Manager:
                 "format": "json",
             },
         )
-        return response["message"]["content"]
+        content = response["message"]["content"]
+        self.last_backend = "Ollama"
+        self.history.append({"role": "assistant", "content": content})
+        return content
 
 
 if __name__ == "__main__":
