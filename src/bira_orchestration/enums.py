@@ -40,6 +40,8 @@ class PlanificationCode(IntEnum):
      3: object not detected in vision
      4: inappropriate request (e.g. user asked for something that is not an object, or that cannot be manipulated)
      5: idle (user want to stop the process, or no input received)
+    6: repeat requested because the input was not understood
+    7: more details needed to disambiguate the target object
     """
 
     ERROR = -1
@@ -49,6 +51,8 @@ class PlanificationCode(IntEnum):
     INAPPROPRIATE_REQUEST = 3
     UNDETECTED_OBJECT = 4
     IDLE = 5
+    REPEAT_REQUEST = 6
+    NEED_MORE_INFO = 7
 
 
 class ExecutionCode(IntEnum):

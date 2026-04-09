@@ -64,6 +64,28 @@ class ComputerVision:
         )[0]
         print("YOLO inference ready.")
         
+    def get_label_name(self, label_id):
+        """
+        Get human-readable name for a YOLO label ID.
+        
+        Args:
+            label_id (int): The YOLO class ID
+            
+        Returns:
+            str: The human-readable label name (e.g., 'person', 'car')
+        """
+        return self.yolo.names.get(int(label_id), f"Unknown_{label_id}")
+    
+    @property
+    def label_dict(self):
+        """
+        Get the complete YOLO model's label dictionary.
+        
+        Returns:
+            dict: Dictionary mapping class IDs to names (e.g., {0: 'person', 1: 'bicycle', ...})
+        """
+        return self.yolo.names
+        
     def detect_objects(self, frame):
         """
         Detect objects in a frame and return both ZED SDK Objects container and YOLO labels.
@@ -202,7 +224,7 @@ class ComputerVision:
         self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
         
         object_list = objects.object_list
-        rd.write_history(object_list)
+        rd.write_history(object_list, computer_vision=self)
         return objects
         
     

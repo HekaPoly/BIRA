@@ -11,7 +11,6 @@ class VisionState(State):
         self.bira_manager.prepare_vision()
 
     def _handle(self):
-        # TODO: Implement actual vision logic
         sl_object, detection_labels = self.bira_manager.controller.vision()
         context = self.bira_manager.get_data()
         context.objects_detected = sl_object.object_list
@@ -44,7 +43,10 @@ class VisionState(State):
                 new_state = StateCode.EXIT
             case VisionCode.SUCCESS:
                 print("Vision processing successful.")
-                feedback = f"J'ai détecté les objets suivants: {', '.join(str(self.bira_manager.get_data().detection_labels))}."
+                detection_labels = self.bira_manager.get_data().detection_labels or []
+                cv = self.bira_manager.controller.computer_vision
+                label_names = [cv.get_label_name(label_id) for label_id in detection_labels]
+                feedback = f"J'ai détecté les objets suivants: {', '.join(label_names)}."
                 new_state = StateCode.PLANNING
             case VisionCode.NO_OBJECT_DETECTED:
                 print("No objects detected.")

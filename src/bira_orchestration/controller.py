@@ -1,3 +1,5 @@
+from time import sleep
+
 from bira_components.camera import Camera
 from bira_components.computer_vision import ComputerVision
 from bira_components import history as bira_history
@@ -6,7 +8,7 @@ from bira_components.SLM_Manager import SLM_Manager
 from bira_components.speech_to_text import SpeechToText
 from bira_components.text_to_speech import TextToSpeech
 from bira_components.uart_transmitter import UARTTransmitter
-from time import sleep
+from bira_orchestration.enums import PlanificationCode
 
 
 class BiraController:
@@ -16,6 +18,7 @@ class BiraController:
         #  components. Maybe we can have a shared memory or a shared database where the camera can write the frames and
         #  the computer vision can read them.
         self.computer_vision = ComputerVision(camera=self.camera)
+        self.uart_transmitter = None
         # self.uart_transmitter = UARTTransmitter()
         self.micro = Micro()
         self.text_to_speech = TextToSpeech()
@@ -71,7 +74,7 @@ class BiraController:
         return sl_object, detection_labels
     
     def send_mechanical_command(self, command):
-         # EXAMPLE: Simulate an execution process that takes some time and is successful
+        # EXAMPLE: Simulate an execution process that takes some time and is successful
         sleep(2)
     
     def speak(self, text):
@@ -80,13 +83,18 @@ class BiraController:
         self.text_to_speech.speak(text)
     
     def prompt_slm(self, context):
-        user_input = context.user_inputs[-1] if context.user_inputs else None
-        detected_objects = getattr(context.objects_detected, "object_list", None)
+        if context.user_inputs:
+            # Keep only the latest user utterance here; dialog continuity is handled by SLM history.
+            user_input = context.user_inputs[-1]
+        else:
+            user_input = None
+        detected_objects = context.objects_detected if context.objects_detected else None
 
         self.slm_manager.set_transcription(user_input or "")
         self.slm_manager.set_detections(
             detection_labels=context.detection_labels,
             detected_objects=detected_objects,
+            computer_vision=self.computer_vision,
         )
 
         return self.slm_manager.run_inference()
@@ -95,7 +103,7 @@ class BiraController:
         components = [
             self.camera,
             self.computer_vision,
-            # self.uart_transmitter,
+            self.uart_transmitter,
             self.micro,
             self.text_to_speech,
             self.speech_to_text,

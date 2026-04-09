@@ -1,5 +1,4 @@
 from bira_orchestration.context import BiraContext
-from bira_orchestration.controller import BiraController
 from bira_orchestration.states.executing_state import ExecutingState
 from bira_orchestration.states.exiting_state import ExitState
 from bira_orchestration.states.idle_state import IdleState
@@ -18,8 +17,15 @@ STATE_CLASSES = {
 }
 
 class BiraManager:
-    def __init__(self):
-        self.controller = BiraController()
+    def __init__(self, mock_mode: bool = False):
+        if mock_mode:
+            from bira_orchestration.mock_controller import MockedBiraController
+
+            self.controller = MockedBiraController()
+        else:
+            from bira_orchestration.controller import BiraController
+
+            self.controller = BiraController()
         self.state = IdleState(self)
         self._context = BiraContext()
         self.counter = 0

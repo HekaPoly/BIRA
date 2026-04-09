@@ -29,6 +29,19 @@ with camera:
         sl_objects, detection_labels = cv.detect_objects(frame)
 ```
 
+### Getting Label Names
+
+The `ComputerVision` class provides two convenient methods to get human-readable label names from YOLO class IDs:
+
+```python
+# Get a single label name
+label_name = cv.get_label_name(0)  # Returns 'person'
+label_name = cv.get_label_name(2)  # Returns 'car'
+
+# Get the complete label dictionary
+label_dict = cv.label_dict  # Returns {0: 'person', 1: 'bicycle', 2: 'car', ...}
+```
+
 ## Return Types
 
 ### `sl.Objects` Container
@@ -261,3 +274,7 @@ if sl_objects.object_list:
 - **Type hints**: [`src/bira_orchestration/context.py`](src/bira_orchestration/context.py)
 - **Usage example**: [`src/bira_orchestration/states/vision_state.py`](src/bira_orchestration/states/vision_state.py)
 - **ZED SDK docs**: https://www.stereolabs.com/docs/api/python/classpyzed_1_1sl_1_1ObjectData.html
+
+## Deprecation Note
+
+The file `src/cv_viewer/labels.py` is **no longer needed**. All label resolution now goes through the `ComputerVision` instance using `get_label_name()` or the `label_dict` property. This ensures labels always match the loaded YOLO model, regardless of which model you use or if you train a custom one.
