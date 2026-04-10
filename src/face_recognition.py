@@ -42,6 +42,7 @@ if (__name__ == "__main__"):
 
     # we need to aquire the image with the zed sdk
     myCamera = Camera()
+    image = None
 
     with myCamera:
         if (myCamera.grab() == sl.ERROR_CODE.SUCCESS):
@@ -54,13 +55,15 @@ if (__name__ == "__main__"):
     grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # upscale the image and get BB of the face can also work with RGB image
     face_BB = detector(grayScale_image, 1)
-
+    print("number of faces detected: {}".format(len(face_BB)))
     for BB in face_BB:
         face = Face(grayScale_image, BB, predictor)
         prediction = emotion_model.predict([face.extract_features()])
         #get the facial landmarks coordinates (x,y)
         #convert to openCv BB
         (x, y, w, h) = convert_dlib_BB_to_openCV_BB(BB)
+        print(x, y, w, h)
+        print("the emotion is {}".format(emotion_model.le.inverse_transform(prediction)[0]))
         #draw the BB
         cv2.rectangle(image, (x,y), (x+w, y+h), (0,255,0),2)
         cv2.putText(image, "###{}".format(emotion_model.le.inverse_transform(prediction)[0]), (x - 10, y - 10),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
