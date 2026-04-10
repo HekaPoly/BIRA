@@ -52,10 +52,16 @@ if (__name__ == "__main__"):
 
     # resizing the image can positvely impact the computing time
     #convert the image to grayscale
-    grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
     # upscale the image and get BB of the face can also work with RGB image
-    face_BB = detector(grayScale_image, 1)
+    face_BB = detector(grayScale_image, 2)
+    if image is None:
+        print("Image is None!")
+    else:
+        print("Image shape:", image.shape, "dtype:", image.dtype)
     print("number of faces detected: {}".format(len(face_BB)))
+    if image.dtype != np.uint8:
+        image = (image * 255).astype(np.uint8)
     for BB in face_BB:
         face = Face(grayScale_image, BB, predictor)
         prediction = emotion_model.predict([face.extract_features()])
