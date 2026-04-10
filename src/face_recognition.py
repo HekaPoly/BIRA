@@ -14,8 +14,8 @@
 import numpy as np
 import dlib
 import cv2
-import pyzed.sl as sl
-from camera import Camera
+# import pyzed.sl as sl
+# from camera import Camera
 from joblib import load
 from utils.image_processing import Face
 
@@ -41,28 +41,25 @@ if (__name__ == "__main__"):
     emotion_model = load('../models/emotion.joblib')
 
     # we need to aquire the image with the zed sdk
-    myCamera = Camera()
+    # myCamera = Camera()
     image = None
 
-    with myCamera:
-        if (myCamera.grab() == sl.ERROR_CODE.SUCCESS):
-            image = myCamera.get_frame()
-        else:
-            print("brooo the camera doesn't work :(")
+    # with myCamera:
+    #     if (myCamera.grab() == sl.ERROR_CODE.SUCCESS):
+    #         image = myCamera.get_frame()
+    #     else:
+    #         print("brooo the camera doesn't work :(")
 
     # resizing the image can positvely impact the computing time
     #convert the image to grayscale
-    grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
+    image = cv2.imread(r"C:\Users\Andy\Desktop\BIRA\src\Screenshot 2026-02-12 093020.png")
+    grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # upscale the image and get BB of the face can also work with RGB image
-    face_BB = detector(grayScale_image, 2)
+    face_BB = detector(grayScale_image, 1)
     if image is None:
         print("Image is None!")
     else:
         print("Image shape:", image.shape, "dtype:", image.dtype)
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-    print("OpenCV detected:", len(faces), "face(s)")
     print("number of faces detected: {}".format(len(face_BB)))
     if image.dtype != np.uint8:
         image = (image * 255).astype(np.uint8)
