@@ -14,8 +14,8 @@
 import numpy as np
 import dlib
 import cv2
-# import pyzed.sl as sl
-# from camera import Camera
+import pyzed.sl as sl
+from camera import Camera
 from joblib import load
 from utils.image_processing import Face
 
@@ -41,19 +41,19 @@ if (__name__ == "__main__"):
     emotion_model = load('../models/emotion.joblib')
 
     # we need to aquire the image with the zed sdk
-    # myCamera = Camera()
+    myCamera = Camera()
     image = None
 
-    # with myCamera:
-    #     if (myCamera.grab() == sl.ERROR_CODE.SUCCESS):
-    #         image = myCamera.get_frame()
-    #     else:
-    #         print("brooo the camera doesn't work :(")
+    with myCamera:
+        if (myCamera.grab() == sl.ERROR_CODE.SUCCESS):
+            image = myCamera.get_frame()
+        else:
+            print("brooo the camera doesn't work :(")
 
     # resizing the image can positvely impact the computing time
     #convert the image to grayscale
-    image = cv2.imread(r"C:\Users\Andy\Desktop\BIRA\src\Screenshot 2026-02-12 093020.png")
-    grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # image = cv2.imread("/home/nvidia/Desktop/Bira/src/Screenshot 2026-02-12 093020.png")
+    grayScale_image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
     # upscale the image and get BB of the face can also work with RGB image
     face_BB = detector(grayScale_image, 1)
     if image is None:
@@ -61,8 +61,6 @@ if (__name__ == "__main__"):
     else:
         print("Image shape:", image.shape, "dtype:", image.dtype)
     print("number of faces detected: {}".format(len(face_BB)))
-    if image.dtype != np.uint8:
-        image = (image * 255).astype(np.uint8)
     for BB in face_BB:
         face = Face(grayScale_image, BB, predictor)
         prediction = emotion_model.predict([face.extract_features()])
@@ -82,33 +80,3 @@ if (__name__ == "__main__"):
             break
     cv2.destroyAllWindows()
     
-#     /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator KNeighborsClassifier from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator GaussianNB from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator SVC from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator DecisionTreeClassifier from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator RandomForestClassifier from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator ExtraTreeClassifier from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator ExtraTreesClassifier from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator GradientBoostingClassifier from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator MLPClassifier from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
-# /home/nvidia/.local/lib/python3.10/site-packages/sklearn/base.py:442: InconsistentVersionWarning: Trying to unpickle estimator LabelEncoder from version 1.8.0 when using version 1.7.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
-# https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
-#   warnings.warn(
