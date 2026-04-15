@@ -89,9 +89,11 @@ class TensorRTInferenceEngine:
 
         self.runner_command = self._resolve_runner_command()
         if not self.runner_command:
+            config_path = self.engine_dir / "config.json"
             logger.warning(
-                "No TensorRT runner command configured. "
-                "Set runtime.runner_command in config.json or TENSORRT_RUNNER_COMMAND."
+                "TensorRT config is present at %s, but runtime.runner_command is not set. "
+                "Set a real local runner command in that file or export TENSORRT_RUNNER_COMMAND.",
+                config_path,
             )
             return False
 
