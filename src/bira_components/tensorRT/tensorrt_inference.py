@@ -87,17 +87,18 @@ class TensorRTInferenceEngine:
 
         # Accept both runtime config.json and template tensorrt_config.json.
         engine_dir_candidates = self._candidate_engine_dirs()
-        candidates = [
-            MODULE_DIR / "tensorrt_config.json",
-        ]
+        candidates: List[Path] = []
         for engine_dir in engine_dir_candidates:
             candidates.extend(
                 [
+                    engine_dir / "config.json",
                     engine_dir / "tensorrt_config.json",
                     engine_dir / "engines" / "config.json",
                     engine_dir / "tensorrt_models" / "engines" / "config.json",
                 ]
             )
+        # Keep module-level template as final fallback.
+        candidates.append(MODULE_DIR / "tensorrt_config.json")
 
         return self._unique_paths(candidates)
 
