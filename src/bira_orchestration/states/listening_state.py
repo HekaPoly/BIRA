@@ -1,5 +1,5 @@
 from bira_orchestration.states.base_state import State
-from bira_orchestration.enums import StateCode, ListeningCode, PlanificationCode
+from bira_orchestration.enums import StateCode, ListeningCode
 
 class ListeningState(State):
     code = StateCode.LISTENING
@@ -17,7 +17,6 @@ class ListeningState(State):
 
     def _decide_next_state(self):
         listening_code = self.bira_manager.get_data().listening_code
-        context = self.bira_manager.get_data()
         feedback = None
         new_state = StateCode.EXIT
 
@@ -31,20 +30,8 @@ class ListeningState(State):
             case ListeningCode.SUCCESS:
                 print("Listening processing successful.")
                 feedback = f"Vous m'avez demandé: {self.bira_manager.get_last_user_input()}."
-                if context.planification_code in {
-                    PlanificationCode.REPEAT_REQUEST,
-                    PlanificationCode.NEED_MORE_INFO,
-                }:
-                    new_state = StateCode.PLANNING
-                else:
-                    route = self.bira_manager.controller.route_request(context)
-                    context.skip_vision_for_current_input = bool(route.get("needs_vision") is False)
-                    context.route_mode_hint = route.get("mode")
-                    if context.skip_vision_for_current_input:
-                        print(f"Routing decision: skip vision (mode_hint={context.route_mode_hint}).")
-                        new_state = StateCode.PLANNING
-                    else:
-                        new_state = StateCode.VISION
+                # Always transition to Planning; Planning will decide if vision is needed.
+                new_state = StateCode.PLANNING
             case ListeningCode.NO_INPUT:
                 print("No voice input received.")
                 feedback = "Je n'ai pas entendu votre commande. Je vais me remettre en veille."
