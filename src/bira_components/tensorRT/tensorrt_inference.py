@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 DEFAULT_ENGINE_DIR = Path(__file__).resolve().parent / "tensorrt_models" / "engines"
+DEFAULT_CONFIG_TEMPLATE = Path(__file__).resolve().parent / "tensorrt_config.json"
 
 
 class TensorRTInferenceEngine:
@@ -22,18 +23,46 @@ class TensorRTInferenceEngine:
     def __init__(self, engine_dir: Optional[str] = None, device_id: int = 0):
         self.engine_dir = Path(engine_dir) if engine_dir else DEFAULT_ENGINE_DIR
         self.device_id = device_id
-        self.config = self._load_config()
+        self.config: Dict[str, Any] = {}
         self.is_loaded = False
         self.runner_command: List[str] = []
 
     def _load_config(self) -> Dict[str, Any]:
         config_path = self.engine_dir / "config.json"
         if not config_path.exists():
+            if DEFAULT_CONFIG_TEMPLATE.exists():
+                logger.info("TensorRT config not found at %s; bootstrapping from %s", config_path, DEFAULT_CONFIG_TEMPLATE)
+                with DEFAULT_CONFIG_TEMPLATE.open("r", encoding="utf-8") as stream:
+                    return json.load(stream)
+
             logger.warning("TensorRT config not found at %s", config_path)
             return {}
 
         with config_path.open("r", encoding="utf-8") as stream:
             return json.load(stream)
+
+    def _write_config(self, config: Dict[str, Any]) -> None:
+        self.engine_dir.mkdir(parents=True, exist_ok=True)
+        config_path = self.engine_dir / "config.json"
+        with config_path.open("w", encoding="utf-8") as stream:
+            json.dump(config, stream, indent=2)
+
+    def _bootstrap_engine_dir(self) -> None:
+        if self.engine_dir.exists():
+            return
+
+        logger.info("TensorRT engine directory not found at %s; creating it from the bundled template.", self.engine_dir)
+        config = self._load_config()
+        if not config:
+            self.engine_dir.mkdir(parents=True, exist_ok=True)
+            return
+
+        runtime_cfg = config.setdefault("runtime", {})
+        env_runner = os.getenv("TENSORRT_RUNNER_COMMAND")
+        if env_runner:
+            runtime_cfg["runner_command"] = env_runner
+
+        self._write_config(config)
 
     def _resolve_runner_command(self) -> List[str]:
         runtime_cfg = self.config.get("runtime", {})
@@ -47,6 +76,13 @@ class TensorRTInferenceEngine:
 
     def load_engine(self) -> bool:
         """Validate the TensorRT assets and the runner command."""
+        self._bootstrap_engine_dir()
+
+        self.config = self._load_config()
+        if not self.config:
+            logger.warning("TensorRT configuration could not be loaded for %s", self.engine_dir)
+            return False
+
         if not self.engine_dir.exists():
             logger.warning("TensorRT engine directory not found: %s", self.engine_dir)
             return False
