@@ -29,28 +29,77 @@ class TensorRTInferenceEngine:
         self.last_error: Optional[str] = None
         self.runner_command: List[str] = []
 
+    @staticmethod
+    def _unique_paths(paths: List[Path]) -> List[Path]:
+        deduped: List[Path] = []
+        seen = set()
+        for path in paths:
+            key = str(path)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(path)
+        return deduped
+
+    @staticmethod
+    def _replace_path_segment(path: Path, old_segment: str, new_segment: str) -> Path:
+        parts = [new_segment if part == old_segment else part for part in path.parts]
+        return Path(*parts)
+
+    def _candidate_engine_dirs(self) -> List[Path]:
+        base_path = self.engine_dir.expanduser()
+        seed_paths = [base_path]
+
+        normalized = str(base_path).replace("\\", "/")
+        if not base_path.is_absolute() and normalized.startswith("home/"):
+            # Common typo on Jetson: missing leading slash.
+            seed_paths.append(Path("/") / base_path)
+
+        candidates: List[Path] = []
+        for seed in seed_paths:
+            candidates.append(seed)
+
+            corrected_models = self._replace_path_segment(seed, "tensorRT_models", "tensorrt_models")
+            candidates.append(corrected_models)
+
+            if seed.name == "engine":
+                candidates.append(seed.with_name("engines"))
+            if corrected_models.name == "engine":
+                candidates.append(corrected_models.with_name("engines"))
+
+            if seed.name == "tensorRT_models":
+                candidates.append(seed.with_name("tensorrt_models"))
+                candidates.append(seed.with_name("tensorrt_models") / "engines")
+            if corrected_models.name == "tensorrt_models":
+                candidates.append(corrected_models / "engines")
+
+            if seed.name == "tensorRT":
+                candidates.append(seed / "tensorrt_models" / "engines")
+            if corrected_models.name == "tensorRT":
+                candidates.append(corrected_models / "tensorrt_models" / "engines")
+
+        return self._unique_paths(candidates)
+
     def _candidate_config_paths(self) -> List[Path]:
         config_override = os.getenv("TENSORRT_CONFIG_PATH")
         if config_override:
             return [Path(config_override).expanduser()]
 
         # Accept both runtime config.json and template tensorrt_config.json.
+        engine_dir_candidates = self._candidate_engine_dirs()
         candidates = [
-            self.engine_dir / "config.json",
-            self.engine_dir / "tensorrt_config.json",
-            self.engine_dir / "engines" / "config.json",
-            self.engine_dir / "tensorrt_models" / "engines" / "config.json",
             MODULE_DIR / "tensorrt_config.json",
         ]
-        deduped: List[Path] = []
-        seen = set()
-        for path in candidates:
-            normalized = str(path)
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            deduped.append(path)
-        return deduped
+        for engine_dir in engine_dir_candidates:
+            candidates.extend(
+                [
+                    engine_dir / "tensorrt_config.json",
+                    engine_dir / "engines" / "config.json",
+                    engine_dir / "tensorrt_models" / "engines" / "config.json",
+                ]
+            )
+
+        return self._unique_paths(candidates)
 
     @staticmethod
     def _resolve_engine_dir_from_config(config: Dict[str, Any], config_path: Path) -> Optional[Path]:
@@ -114,14 +163,28 @@ class TensorRTInferenceEngine:
 
     def load_engine(self) -> bool:
         """Validate the TensorRT assets and the runner command."""
-        if not self.engine_dir.exists() or not self.engine_dir.is_dir():
+        engine_dir_candidates = self._candidate_engine_dirs()
+        resolved_engine_dir = next(
+            (path for path in engine_dir_candidates if path.exists() and path.is_dir()),
+            None,
+        )
+        if resolved_engine_dir is None:
+            tried = ", ".join(str(path) for path in engine_dir_candidates)
             self.last_error = (
-                f"TensorRT engine directory not found: {self.engine_dir}. "
-                "Set TENSORRT_ENGINE_DIR or provide tensorrt_engine_dir."
+                "TensorRT engine directory not found. "
+                f"Tried: {tried}. Set TENSORRT_ENGINE_DIR or provide tensorrt_engine_dir."
             )
             logger.warning(self.last_error)
             return False
-        
+
+        if resolved_engine_dir != self.engine_dir:
+            logger.warning(
+                "TensorRT engine path corrected from %s to %s",
+                self.engine_dir,
+                resolved_engine_dir,
+            )
+            self.engine_dir = resolved_engine_dir
+
         self.runner_command = self._resolve_runner_command()
         if not self.runner_command:
             self.last_error = (
