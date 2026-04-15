@@ -22,14 +22,27 @@ class TensorRTInferenceEngine:
     def __init__(self, engine_dir: Optional[str] = None, device_id: int = 0):
         self.engine_dir = Path(engine_dir) if engine_dir else DEFAULT_ENGINE_DIR
         self.device_id = device_id
+        self.config_path: Optional[Path] = None
         self.config = self._load_config()
         self.is_loaded = False
+        self.last_error: Optional[str] = None
         self.runner_command: List[str] = []
 
     def _load_config(self) -> Dict[str, Any]:
-        config_path = self.engine_dir / "config.json"
+        config_override = os.getenv("TENSORRT_CONFIG_PATH")
+        config_path = Path(config_override) if config_override else self.engine_dir / "config.json"
+        self.config_path = config_path
         if not config_path.exists():
-            logger.warning("TensorRT config not found at %s", config_path)
+            if os.getenv("TENSORRT_RUNNER_COMMAND"):
+                logger.info(
+                    "TensorRT config not found at %s; using TENSORRT_RUNNER_COMMAND from environment.",
+                    config_path,
+                )
+            else:
+                logger.warning(
+                    "TensorRT config not found at %s. Create it or set TENSORRT_RUNNER_COMMAND.",
+                    config_path,
+                )
             return {}
 
         with config_path.open("r", encoding="utf-8") as stream:
@@ -48,17 +61,23 @@ class TensorRTInferenceEngine:
     def load_engine(self) -> bool:
         """Validate the TensorRT assets and the runner command."""
         if not self.engine_dir.exists():
-            logger.warning("TensorRT engine directory not found: %s", self.engine_dir)
+            self.last_error = (
+                f"TensorRT engine directory not found: {self.engine_dir}. "
+                "Set TENSORRT_ENGINE_DIR or provide tensorrt_engine_dir."
+            )
+            logger.warning(self.last_error)
             return False
-
+        
         self.runner_command = self._resolve_runner_command()
         if not self.runner_command:
-            logger.warning(
+            self.last_error = (
                 "No TensorRT runner command configured. "
                 "Set runtime.runner_command in config.json or TENSORRT_RUNNER_COMMAND."
             )
+            logger.warning(self.last_error)
             return False
 
+        self.last_error = None
         self.is_loaded = True
         logger.info("TensorRT engine is ready via runner: %s", " ".join(self.runner_command))
         return True

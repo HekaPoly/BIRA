@@ -110,7 +110,9 @@ class SLM_Manager:
             else tensorrt_fallback_to_ollama
         )
         default_engine_dir = Path(__file__).resolve().parent / "tensorRT" / "tensorrt_models" / "engines"
-        self.tensorrt_engine_dir = Path(tensorrt_engine_dir or default_engine_dir)
+        env_engine_dir = os.getenv("TENSORRT_ENGINE_DIR")
+        resolved_engine_dir = tensorrt_engine_dir or env_engine_dir or default_engine_dir
+        self.tensorrt_engine_dir = Path(resolved_engine_dir)
         self.trt_engine: Optional[TensorRTInferenceEngine] = None
         self.trt_ready = False
         self.model_loaded = False
@@ -186,6 +188,7 @@ class SLM_Manager:
                 print(f"TensorRT ready (engine: {self.tensorrt_engine_dir})")
                 return
 
+            details = getattr(self.trt_engine, "last_error", None)
             self.trt_engine = None
             bira_history.log_event(
                 "tensorrt_load_unavailable",
@@ -194,7 +197,13 @@ class SLM_Manager:
             )
             if not self.tensorrt_fallback_to_ollama:
                 raise RuntimeError(f"No TensorRT engine available in {self.tensorrt_engine_dir}")
-            print(f"TensorRT engine not ready in {self.tensorrt_engine_dir}. Falling back to Ollama.")
+            if details:
+                print(
+                    f"TensorRT engine not ready in {self.tensorrt_engine_dir} "
+                    f"({details}). Falling back to Ollama."
+                )
+            else:
+                print(f"TensorRT engine not ready in {self.tensorrt_engine_dir}. Falling back to Ollama.")
         except Exception as exc:
             self.trt_ready = False
             self.trt_engine = None
