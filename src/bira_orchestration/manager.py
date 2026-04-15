@@ -71,8 +71,8 @@ class BiraManager:
         if next_code < self.state.code:
             print(f"[State log] Warning: Transitioning to a previous state ({next_code} < {self.state.code})")
             self.counter += 1
-            if self.counter > 3:
-                print("[State log] Looped three times. Forced exit.")
+            if self.counter > 6:  # If we loop more than 6 times, we force exit for safety
+                print("[State log] Looped six times. Forced exit.")
                 next_code = StateCode.EXIT
         state_cls = STATE_CLASSES[next_code]
         self.state = state_cls(self)

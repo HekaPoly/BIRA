@@ -34,7 +34,7 @@ class ListeningState(State):
                 new_state = StateCode.PLANNING
             case ListeningCode.NO_INPUT:
                 self.log_state("No voice input received.")
-                feedback = "Je n'ai pas entendu votre commande. Je vais me remettre en veille."
+                feedback = "I didn't hear your command. Going back to standby."
                 new_state = StateCode.IDLE
             case _:
                 self.log_state("Unknown listening code. Transitioning to exit state for safety.")

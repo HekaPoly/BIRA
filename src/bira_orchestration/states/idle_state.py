@@ -15,6 +15,6 @@ class IdleState(State):
 
     def _decide_next_state(self):
         self.log_state("Wake up")
-        feedback = "Je suis réveillé. Que puis-je faire pour vous ?"
+        feedback = "I am awake. What can I do for you?"
         self.emit_feedback(feedback, source="state_log")
         self.bira_manager.change_state(StateCode.LISTENING)

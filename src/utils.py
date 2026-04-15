@@ -106,7 +106,7 @@ def string_to_label(sentence: str) -> int:
                 print(f"Key of recognized object: {key} , {LABELS[key]}")
 
     if len(labels) != 1:
-        print("Erreur, il y a", len(labels), "objets.")
+        print("Error, there are", len(labels), "objects.")
         return 80
 
     return labels[0]

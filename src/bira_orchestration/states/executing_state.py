@@ -29,20 +29,20 @@ class ExecutingState(State):
                 new_state = StateCode.EXIT
             case ExecutionCode.SUCCESS:
                 self.log_state("Execution processing successful.")
-                feedback = "J'ai exécuté la tâche demandée. Voulez-vous que je fasse autre chose ?"
+                feedback = "I completed the requested task. Would you like me to do something else?"
                 new_state = StateCode.LISTENING
             case ExecutionCode.UNABLE_TO_MOVE:
                 self.log_state("Unable to move. I might be blocked or there might be an obstacle.")
-                feedback = "Je n'ai pas pu atteindre l'objet. Il semble qu'il y ait un obstacle ou que je suis bloqué."
+                feedback = "I couldn't reach the object. It seems there's an obstacle or I'm blocked."
                 new_state = StateCode.IDLE
             case ExecutionCode.UNREACHABLE_OBJECT:
                 self.log_state(
                     "Unreachable object. The object might be out of my reach or might have been moved since the vision stage.")
-                feedback = "Je n'ai pas pu atteindre l'objet. Il semble que l'objet soit hors de ma portée ou qu'il ait été déplacé depuis la vision."
+                feedback = "I couldn't reach the object. It seems the object is out of reach or has moved since detection."
                 new_state = StateCode.VISION
             case ExecutionCode.OBJECT_DROPPED:
                 self.log_state("Object dropped. I might have dropped the object during the execution.")
-                feedback = "J'ai laissé tomber l'objet pendant l'exécution. Je suis désolé. Voulez-vous que je réessaye ?"
+                feedback = "I dropped the object during execution. I'm sorry. Would you like me to try again?"
                 new_state = StateCode.LISTENING
             case _:
                 self.log_state("Unknown execution code. Transitioning to exit state for safety.")

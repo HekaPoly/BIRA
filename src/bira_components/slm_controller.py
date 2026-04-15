@@ -25,18 +25,24 @@ class SLM_Controller:
         if self.debug:
             print(f"[SLM_DEBUG] {message}")
 
+    def _chat(self, messages: list[dict], *, stream: bool, think: bool, schema: dict | None = None, max_tokens: int | None = None):
+        options = {"temperature": self.temperature, "num_predict": max_tokens or self.num_predict}
+        kwargs = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": stream,
+            "think": think,
+            "options": options,
+        }
+        if schema is not None:
+            kwargs["format"] = schema
+        return self.client.chat(**kwargs)
+
     def chat_stream_json(self, messages: list[dict], schema: dict) -> tuple[str, str]:
         thinking = ""
         content = ""
 
-        stream = self.client.chat(
-            model=self.model_name,
-            messages=messages,
-            stream=True,
-            think=True,
-            format=schema,
-            options={"temperature": self.temperature, "num_predict": self.num_predict},
-        )
+        stream = self._chat(messages, stream=True, think=True, schema=schema)
 
         in_thinking = False
         for chunk in stream:
@@ -67,26 +73,13 @@ class SLM_Controller:
         return thinking, content
 
     def chat_non_stream_json(self, messages: list[dict], schema: dict) -> tuple[str, str]:
-        fallback = self.client.chat(
-            model=self.model_name,
-            messages=messages,
-            stream=False,
-            think=True,
-            format=schema,
-            options={"temperature": self.temperature, "num_predict": self.num_predict},
-        )
+        fallback = self._chat(messages, stream=False, think=True, schema=schema)
         data = self._as_dict(fallback)
         message = self._as_dict(data.get("message", {}))
         return str(message.get("thinking") or ""), str(message.get("content") or "")
 
     def chat_non_stream_text(self, messages: list[dict], max_tokens: int = 120) -> str:
-        result = self.client.chat(
-            model=self.model_name,
-            messages=messages,
-            stream=False,
-            think=False,
-            options={"temperature": self.temperature, "num_predict": max_tokens},
-        )
+        result = self._chat(messages, stream=False, think=False, max_tokens=max_tokens)
         data = self._as_dict(result)
         message = self._as_dict(data.get("message", {}))
         return str(message.get("content") or "").strip()

@@ -112,7 +112,7 @@ class PlanningState(State):
                 context.planification_code = PlanificationCode.SUCCESS
                 return
             # Fallback (shouldn't happen if SLM is correct)
-            self.bira_manager.add_feedback("Erreur: objet non trouvé malgré la confirmation.")
+            self.bira_manager.add_feedback("Error: object not found despite confirmation.")
             context.feedback_source = "fallback_feedback"
             context.planification_code = PlanificationCode.UNDETECTED_OBJECT
             return
