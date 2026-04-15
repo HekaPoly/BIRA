@@ -141,7 +141,36 @@ class SLM_Formatter:
             f"Return JSON matching this schema exactly: {schema_json}"
         )
 
-    def build_route_messages(self, transcription: str) -> list[dict]:
+    def build_route_messages(
+        self,
+        transcription: str,
+        pending_label: str | None = None,
+        detected_objects: Optional[list] = None,
+        detection_labels: Optional[list[int]] = None,
+    ) -> list[dict]:
+        pending_note = "3. No unresolved clarification is pending.\n"
+        candidates_note = ""
+        
+        if pending_label and detected_objects:
+            # List detected candidates with positions so model knows what objects exist
+            candidates_summary = []
+            for idx, obj in enumerate(detected_objects):
+                position = getattr(obj, "position", None)
+                if position:
+                    x, y, z = position[0], position[1], position[2]
+                    candidates_summary.append(f"  [{idx}] position=({x:.2f}, {y:.2f}, {z:.2f})")
+            
+            if candidates_summary:
+                candidates_note = f"4. Candidates for pending '{pending_label}':\n" + "\n".join(candidates_summary) + "\n"
+                candidates_note += "   User may respond with spatial terms (left, right, closest, farthest) to select one.\n"
+            
+            pending_note = (
+                f"3. Pending object from clarification: {pending_label}. "
+                f"User is selecting from {len(detected_objects)} detected candidates.\n"
+                "   Responses like 'the farthest one', 'left one', 'closest', etc. are selections that STILL NEED VISION "
+                "(to finalize which candidate was chosen).\n"
+            )
+        
         route_system_prompt = (
             "You are a routing classifier for a robotic arm assistant. "
             "Your ONLY job: decide if the request needs VISION (camera input) before planning. "
@@ -151,8 +180,12 @@ class SLM_Formatter:
             "1. needs_vision=TRUE if: user asks for an object (pick, grab, bring, show, give, hold, take) with any noun. "
             "   Even 'give me a cup' needs vision to identify which cup.\n"
             "2. needs_vision=FALSE if: user stops, chats, asks out-of-scope (run, walk, cook), or unclear intent.\n"
-            "3. If needs_vision=TRUE, mode defaults to 'clarification' (planning will handle object matching).\n"
-            "4. If needs_vision=FALSE, mode reflects intent: 'stop', 'conversing', 'out_of_scope', 'unclear_action', 'repeat'."
+            "   EXCEPTION: If there is a pending object and candidates are waiting, a spatial response is a clarification "
+            "   (needs_vision=TRUE, mode=clarification).\n"
+            f"{pending_note}"
+            f"{candidates_note}"
+            "5. If needs_vision=TRUE, mode defaults to 'clarification' (planning will handle object matching).\n"
+            "6. If needs_vision=FALSE, mode reflects intent: 'stop', 'conversing', 'out_of_scope', 'unclear_action', 'repeat'."
         )
         return [
             {"role": "system", "content": route_system_prompt},

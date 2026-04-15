@@ -29,7 +29,7 @@ class ListeningState(State):
                 new_state = StateCode.EXIT
             case ListeningCode.SUCCESS:
                 self.log_state("Listening processing successful.")
-                feedback = f"Vous m'avez demandé: {self.bira_manager.get_last_user_input()}."
+                feedback = f"You asked me: {self.bira_manager.get_last_user_input()}."
                 # Always transition to Planning; Planning will decide if vision is needed.
                 new_state = StateCode.PLANNING
             case ListeningCode.NO_INPUT:

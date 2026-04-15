@@ -76,7 +76,7 @@ class SLM_Manager:
         if self.debug:
             print(f"[SLM_DEBUG] {message}")
 
-    def reset_conversation(self) -> None:
+    def reset_task_context(self) -> None:
         self.history = []
         self.detections = None
         self.detection_candidates = None
@@ -147,12 +147,24 @@ class SLM_Manager:
         self.detections = resolved if resolved else None
         self.detection_candidates = candidates if candidates else None
 
-    def route_request(self, transcription: str) -> dict:
+    def route_request(
+        self,
+        transcription: str,
+        pending_label: Optional[str] = None,
+        detected_objects: Optional[list] = None,
+        detection_labels: Optional[list[int]] = None,
+    ) -> dict:
         text = str(transcription or "").strip().lower()
         if not text:
             return {"needs_vision": False, "mode": "repeat"}
 
-        messages = self.formatter.build_route_messages(text)
+        active_pending_label = pending_label if pending_label is not None else self.pending_label
+        messages = self.formatter.build_route_messages(
+            text,
+            pending_label=active_pending_label,
+            detected_objects=detected_objects,
+            detection_labels=detection_labels,
+        )
         if self.stream_json:
             thinking, content = self.chat_controller.chat_stream_json(
                 messages=messages,
@@ -193,7 +205,7 @@ class SLM_Manager:
             feedback_source = "fallback_feedback"
 
         if mode == "stop":
-            self.reset_conversation()
+            self.reset_task_context()
 
         self.pending_label = None
         return {
@@ -311,7 +323,7 @@ class SLM_Manager:
             parsed["feedback_source"] = "slm_feedback"
 
             if parsed["mode"] == "stop":
-                self.reset_conversation()
+                self.reset_task_context()
 
             if parsed["mode"] == "clarification":
                 requested_label = self.formatter.find_requested_label(transcription, active_candidates)

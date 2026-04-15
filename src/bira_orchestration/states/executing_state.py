@@ -30,10 +30,14 @@ class ExecutingState(State):
             case ExecutionCode.SUCCESS:
                 self.log_state("Execution processing successful.")
                 feedback = "I completed the requested task. Would you like me to do something else?"
+                self.bira_manager.get_data().clear_vision_context()
+                self.bira_manager.controller.slm_manager.reset_task_context()
                 new_state = StateCode.LISTENING
             case ExecutionCode.UNABLE_TO_MOVE:
                 self.log_state("Unable to move. I might be blocked or there might be an obstacle.")
                 feedback = "I couldn't reach the object. It seems there's an obstacle or I'm blocked."
+                self.bira_manager.get_data().clear_vision_context()
+                self.bira_manager.controller.slm_manager.reset_task_context()
                 new_state = StateCode.IDLE
             case ExecutionCode.UNREACHABLE_OBJECT:
                 self.log_state(
@@ -43,6 +47,8 @@ class ExecutingState(State):
             case ExecutionCode.OBJECT_DROPPED:
                 self.log_state("Object dropped. I might have dropped the object during the execution.")
                 feedback = "I dropped the object during execution. I'm sorry. Would you like me to try again?"
+                self.bira_manager.get_data().clear_vision_context()
+                self.bira_manager.controller.slm_manager.reset_task_context()
                 new_state = StateCode.LISTENING
             case _:
                 self.log_state("Unknown execution code. Transitioning to exit state for safety.")

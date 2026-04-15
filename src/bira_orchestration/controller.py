@@ -120,7 +120,13 @@ class BiraController:
 
     def route_request(self, context):
         user_input = context.user_inputs[-1] if context.user_inputs else ""
-        return self.slm_manager.route_request(user_input)
+        detected_objects = context.objects_detected if context.objects_detected else None
+        return self.slm_manager.route_request(
+            user_input,
+            pending_label=self.slm_manager.pending_label,
+            detected_objects=detected_objects,
+            detection_labels=context.detection_labels if context.detection_labels else None,
+        )
     
     def destroy(self):
         components = [

@@ -56,3 +56,10 @@ class BiraContext:
 
     def reset_for_execution(self) -> None:
         self.execution_code = ExecutionCode.NO_RESPONSE
+
+    def clear_vision_context(self) -> None:
+        self.objects_detected.clear()
+        self.detection_labels.clear()
+        self.object_selected = None
+        self.skip_vision_for_current_input = False
+        self.route_mode_hint = None

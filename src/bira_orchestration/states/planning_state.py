@@ -87,9 +87,10 @@ class PlanningState(State):
                 context.detection_labels = []
         elif not needs_vision:
             self.log_state(f"Planning: No vision needed for '{user_input[:60]}...' (mode_hint={mode_hint})")
-            # Prevent stale detections from previous turns from leaking into this turn.
-            context.objects_detected = []
-            context.detection_labels = []
+            if mode_hint not in {"clarification", "confirmation"}:
+                # Prevent stale detections from previous completed turns from leaking into this turn.
+                context.objects_detected = []
+                context.detection_labels = []
 
         # Now prompt SLM with available vision data (or empty if not needed).
         response = self.bira_manager.controller.prompt_slm(context)
@@ -99,6 +100,8 @@ class PlanningState(State):
 
         # Route based on SLM's mode decision (which has already validated the logic)
         if mode == "stop":
+            context.clear_vision_context()
+            self.bira_manager.controller.slm_manager.reset_task_context()
             self.bira_manager.add_feedback(feedback)
             context.planification_code = PlanificationCode.IDLE
             return
