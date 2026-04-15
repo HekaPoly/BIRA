@@ -109,7 +109,7 @@ class SLM_Manager:
             if tensorrt_fallback_to_ollama is None
             else tensorrt_fallback_to_ollama
         )
-        default_engine_dir = Path(__file__).resolve().parent / "tensorRT" / "tensorrt_models" / "engines"
+        default_engine_dir = Path(__file__).resolve().parent / "tensorRT"
         env_engine_dir = os.getenv("TENSORRT_ENGINE_DIR")
         resolved_engine_dir = tensorrt_engine_dir or env_engine_dir or default_engine_dir
         self.tensorrt_engine_dir = Path(resolved_engine_dir)
