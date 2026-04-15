@@ -58,10 +58,20 @@ class MockedBiraController:
                 print(f"Unable to preload {label}: {exc}")
 
     def sleep_mode(self):
-        input("[MOCK:WAKE] Press Enter to wake BIRA... ")
+        try:
+            input("[MOCK:WAKE] Press Enter to wake BIRA... ")
+        except EOFError:
+            # In non-interactive test runs, EOF means no further input is available.
+            print("[MOCK:WAKE] EOF received; shutting down mock run.")
+            raise SystemExit(0)
 
     def listen(self):
-        transcription = input("[MOCK:USER_INPUT] ").strip()
+        try:
+            transcription = input("[MOCK:USER_INPUT] ").strip()
+        except EOFError:
+            # Gracefully terminate when stdin is closed (e.g., piped single-turn tests).
+            print("[MOCK:USER_INPUT] EOF received; shutting down mock run.")
+            raise SystemExit(0)
         if transcription.lower() in {"q", "quit", "exit"}:
             return "stop"
         return transcription
@@ -110,6 +120,21 @@ class MockedBiraController:
             user_input = context.user_inputs[-1]
         else:
             user_input = None
+        mode_hint = context.route_mode_hint
+        if context.skip_vision_for_current_input and mode_hint in {
+            "conversing",
+            "out_of_scope",
+            "repeat",
+            "stop",
+            "inappropriate",
+            "unclear_action",
+        }:
+            return self.slm_manager.respond_from_mode_hint(
+                mode=mode_hint,
+                transcription=user_input or "",
+                detections=[],
+            )
+
         detected_objects = context.objects_detected if context.objects_detected else None
 
         self.slm_manager.set_transcription(user_input or "")
@@ -120,6 +145,10 @@ class MockedBiraController:
         )
 
         return self.slm_manager.run_inference()
+
+    def route_request(self, context):
+        user_input = context.user_inputs[-1] if context.user_inputs else ""
+        return self.slm_manager.route_request(user_input)
 
     def destroy(self):
         components = [

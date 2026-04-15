@@ -49,22 +49,13 @@ class PlanningState(State):
         return []
 
     def _handle(self):
-        # Single-pass decision making: trust the SLM's mode decision (confirmation, clarification, repeat, stop)
+        # Single-pass decision making: trust the SLM mode decision and route accordingly.
         context = self.bira_manager.get_data()
         context.object_selected = None
-
-        # Early exit if vision detected no objects: avoid unnecessary SLM inference.
-        # The SLM would handle this internally (return empty candidates), but we optimize here
-        # to fail fast when computer vision has already failed, as there's nothing to plan.
-        if not context.objects_detected:
-            self.bira_manager.add_feedback("Je ne vois aucun objet pertinent. Pouvez-vous reformuler ?")
-            context.planification_code = PlanificationCode.UNDETECTED_OBJECT
-            return
 
         response = self.bira_manager.controller.prompt_slm(context)
         feedback = response.get("response", "Je n'ai pas compris la demande.")
         mode = response.get("mode", "clarification")
-        request_scope = response.get("request_scope", "in_scope")
 
         # Route based on SLM's mode decision (which has already validated the logic)
         if mode == "stop":
@@ -98,20 +89,27 @@ class PlanningState(State):
             return
 
         if mode == "inappropriate":
-            # SLM marked the request as out-of-scope.
+            # SLM flagged moderated illicit content.
             self.bira_manager.add_feedback(feedback)
             context.planification_code = PlanificationCode.INAPPROPRIATE_REQUEST
+            return
+
+        if mode == "out_of_scope":
+            # SLM identified an action outside robotic arm capabilities.
+            self.bira_manager.add_feedback(feedback)
+            context.planification_code = PlanificationCode.OUT_OF_SCOPE_REQUEST
+            return
+
+        if mode == "conversing":
+            # SLM is having a regular conversation, with no execution requested.
+            self.bira_manager.add_feedback(feedback)
+            context.planification_code = PlanificationCode.CONVERSING
             return
 
         if mode == "repeat":
             # SLM couldn't understand input or action
             self.bira_manager.add_feedback(feedback)
             context.planification_code = PlanificationCode.REPEAT_REQUEST
-            return
-
-        if request_scope == "out_of_scope":
-            self.bira_manager.add_feedback(feedback)
-            context.planification_code = PlanificationCode.INAPPROPRIATE_REQUEST
             return
 
         # mode == "clarification" or any other mode: SLM needs more information
@@ -139,7 +137,11 @@ class PlanningState(State):
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.INAPPROPRIATE_REQUEST:
-                print("Inappropriate request. User needs to ask for a valid object.")
+                print("Inappropriate request. Content is not allowed.")
+                feedback = self.bira_manager.get_last_feedback()
+                new_state = StateCode.LISTENING
+            case PlanificationCode.OUT_OF_SCOPE_REQUEST:
+                print("Out-of-scope action. User should ask for a supported robotic-arm task.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.UNDETECTED_OBJECT:
@@ -156,6 +158,10 @@ class PlanningState(State):
                 new_state = StateCode.LISTENING
             case PlanificationCode.REFORMULATE_REQUEST:
                 print("Requested object not found. User needs to reformulate.")
+                feedback = self.bira_manager.get_last_feedback()
+                new_state = StateCode.LISTENING
+            case PlanificationCode.CONVERSING:
+                print("Conversational exchange only. Returning to listening.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.IDLE:

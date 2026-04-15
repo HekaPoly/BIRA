@@ -37,12 +37,14 @@ class PlanificationCode(IntEnum):
      0: no response (yet)
      1: success
      2: unclear command
-     3: object not detected in vision
-     4: inappropriate request (e.g. user asked for something that is not an object, or that cannot be manipulated)
+    3: inappropriate request (illicit or unsafe content)
+    4: object not detected in vision
      5: idle (user want to stop the process, or no input received)
     6: repeat requested because the input was not understood
     7: more details needed to disambiguate the target object
     8: reformulate request because no candidate matches the requested object
+    9: conversational response only (no execution requested)
+    10: request asks for an action outside robotic arm capabilities
     """
 
     ERROR = -1
@@ -55,6 +57,8 @@ class PlanificationCode(IntEnum):
     REPEAT_REQUEST = 6
     NEED_MORE_INFO = 7
     REFORMULATE_REQUEST = 8
+    CONVERSING = 9
+    OUT_OF_SCOPE_REQUEST = 10
 
 
 class ExecutionCode(IntEnum):

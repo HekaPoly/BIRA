@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from typing import Optional
 
 from ollama import Client
 
-try:
-    from bira_components.tensorRT import TensorRTInferenceEngine
-except Exception:
-    TensorRTInferenceEngine = None
+from bira_components.slm_controller import SLM_Controller
+from bira_components.slm_formatter import SLM_Formatter
+from bira_components.tensorrt_manager import TensorRT_Manager
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -21,54 +19,6 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _parse_first_json(text: str) -> dict:
-    """Parse the first complete JSON object from text."""
-    text = text.strip()
-    object_start = text.find("{")
-    array_start = text.find("[")
-
-    if object_start == -1 and array_start == -1:
-        raise json.JSONDecodeError("No JSON value found", text, 0)
-
-    start = (
-        object_start
-        if array_start == -1
-        else array_start
-        if object_start == -1
-        else min(object_start, array_start)
-    )
-
-    opener = text[start]
-    closer = "}" if opener == "{" else "]"
-    depth = 0
-    in_string = False
-    escape = False
-
-    for index in range(start, len(text)):
-        char = text[index]
-        if escape:
-            escape = False
-            continue
-        if char == "\\" and in_string:
-            escape = True
-            continue
-        if in_string:
-            if char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-            continue
-        if char == opener:
-            depth += 1
-        elif char == closer:
-            depth -= 1
-            if depth == 0:
-                return json.loads(text[start : index + 1])
-
-    raise json.JSONDecodeError("Unbalanced JSON", text, start)
 
 
 class SLM_Manager:
@@ -99,14 +49,11 @@ class SLM_Manager:
         self.detection_candidates = None
         self.transcription = None
         self.debug = _env_flag("SLM_DEBUG", default=False)
+        self.stream_json = _env_flag("SLM_STREAM", default=False)
         self.num_predict = int(os.getenv("SLM_NUM_PREDICT", "900"))
         self.pending_label: Optional[str] = None
         # Policy: always prefer TensorRT when available in local mode.
         self.prefer_tensorrt = True
-        default_engine_dir = Path(__file__).resolve().parent / "tensorRT" / "tensorrt_models" / "engines"
-        self.tensorrt_engine_dir = Path(tensorrt_engine_dir or default_engine_dir)
-        self.trt_engine = None
-        self.trt_ready = False
         self.response_schema = {
             "type": "object",
             "properties": {
@@ -119,13 +66,11 @@ class SLM_Manager:
                         "reformulate",
                         "repeat",
                         "unclear_action",
+                        "conversing",
+                        "out_of_scope",
                         "inappropriate",
                         "stop",
                     ],
-                },
-                "request_scope": {
-                    "type": "string",
-                    "enum": ["in_scope", "out_of_scope"],
                 },
                 "selected_candidate_index": {
                     "type": ["integer", "null"],
@@ -136,7 +81,6 @@ class SLM_Manager:
             "required": [
                 "response",
                 "mode",
-                "request_scope",
                 "selected_candidate_index",
                 "selected_label",
                 "selected_label_id",
@@ -154,38 +98,26 @@ class SLM_Manager:
         else:
             self.client = Client(host="http://localhost:11434")
 
-        if self.mode != "local" and self.prefer_tensorrt:
-            print("TensorRT is only available in local mode. Falling back to Ollama.")
-            self.prefer_tensorrt = False
-
-        if self.prefer_tensorrt:
-            if TensorRTInferenceEngine is None:
-                print("TensorRT support is unavailable. Falling back to Ollama.")
-                self.prefer_tensorrt = False
-            else:
-                self._init_tensorrt_engine()
+        self.formatter = SLM_Formatter(response_schema=self.response_schema)
+        self.chat_controller = SLM_Controller(
+            client=self.client,
+            model_name=self.model_name,
+            temperature=self.temperature,
+            num_predict=self.num_predict,
+            debug=self.debug,
+        )
+        self.tensorrt_manager = TensorRT_Manager(
+            mode=self.mode,
+            prefer_tensorrt=self.prefer_tensorrt,
+            engine_dir=tensorrt_engine_dir,
+        )
+        self.tensorrt_manager.initialize()
+        self.prefer_tensorrt = self.tensorrt_manager.prefer_tensorrt
 
     def _debug_log(self, message: str) -> None:
         """Log debug message if SLM_DEBUG is enabled."""
         if self.debug:
             print(f"[SLM_DEBUG] {message}")
-
-    def _init_tensorrt_engine(self) -> None:
-        try:
-            self.trt_engine = TensorRTInferenceEngine(engine_dir=str(self.tensorrt_engine_dir))
-            self.trt_ready = bool(self.trt_engine.load_engine())
-
-            if self.trt_ready:
-                print(f"TensorRT ready (engine: {self.tensorrt_engine_dir})")
-                return
-
-            self.trt_engine = None
-            # If TensorRT is not detected/ready, fallback to Ollama.
-            print(f"TensorRT engine not ready in {self.tensorrt_engine_dir}. Falling back to Ollama.")
-        except Exception as exc:
-            self.trt_ready = False
-            self.trt_engine = None
-            print(f"TensorRT unavailable ({exc}). Falling back to Ollama.")
 
     def reset_conversation(self) -> None:
         """Reset conversation history."""
@@ -272,146 +204,93 @@ class SLM_Manager:
         self.detections = resolved if resolved else None
         self.detection_candidates = candidates if candidates else None
 
-    def _build_prompt(self, transcription: str, detections: list[str], candidates: Optional[list[dict]]) -> str:
-        """Build user prompt with detections and candidates."""
-        candidates_json = json.dumps(candidates or [], ensure_ascii=False)
-        schema_json = json.dumps(self.response_schema, ensure_ascii=False)
-        pending_label_text = self.pending_label or "null"
-        return (
-            f"Transcription: {transcription}\n"
-            f"Detected objects: {detections}\n"
-            f"Pending label from prior clarification (if any): {pending_label_text}\n"
-            f"Candidates (format: index, label, label_id, position [x,y,z]): {candidates_json}\n"
-            "Important: when transcription references prior clarification (e.g., 'left one', 'closest one'), "
-            "resolve using candidates positions and return confirmation with selected_candidate_index.\n"
-            "Important: if pending label exists and user says pronouns like 'left one', resolve only within that label group.\n"
-            f"Return JSON matching this schema exactly: {schema_json}"
-        )
+    def route_request(self, transcription: str) -> dict:
+        """Decide whether vision is needed before planning."""
+        text = str(transcription or "").strip().lower()
+        if not text:
+            return {"needs_vision": False, "mode": "repeat"}
 
-    @staticmethod
-    def _as_dict(value):
-        if hasattr(value, "model_dump"):
-            return value.model_dump()
-        if isinstance(value, dict):
-            return value
-        return {}
-
-    def _parse_response(self, raw_response: str) -> dict:
-        """Parse model response JSON."""
-        try:
-            parsed = json.loads(raw_response)
-        except json.JSONDecodeError:
-            parsed = _parse_first_json(raw_response)
-
-        # Handle array responses (take last element)
-        if isinstance(parsed, list) and parsed:
-            parsed = parsed[-1]
-
-        if not isinstance(parsed, dict):
-            raise ValueError("Response is not JSON object")
-
-        # Validate and normalize fields
-        mode = str(parsed.get("mode", "clarification")).strip().lower()
-        if mode not in {
-            "confirmation",
-            "clarification",
-            "reformulate",
-            "repeat",
-            "unclear_action",
-            "inappropriate",
+        stop_markers = {
             "stop",
-        }:
-            mode = "clarification"
+            "cancel",
+            "quit",
+            "exit",
+            "nevermind",
+            "never mind",
+        }
+        if text in stop_markers:
+            return {"needs_vision": False, "mode": "stop"}
 
-        request_scope = str(parsed.get("request_scope", "in_scope")).strip().lower()
-        if request_scope not in {"in_scope", "out_of_scope"}:
-            request_scope = "in_scope"
-
-        response_text = str(parsed.get("response", "I didn't understand. Could you repeat?"))
-
-        selected_label = parsed.get("selected_label")
-        selected_label = (str(selected_label).strip() or None) if selected_label is not None else None
-
-        selected_label_id = parsed.get("selected_label_id")
-        try:
-            selected_label_id = int(selected_label_id) if selected_label_id is not None else None
-        except (TypeError, ValueError):
-            selected_label_id = None
-
-        selected_candidate_index = parsed.get("selected_candidate_index")
-        try:
-            selected_candidate_index = int(selected_candidate_index) if selected_candidate_index is not None else None
-        except (TypeError, ValueError):
-            selected_candidate_index = None
-
-        return {
-            "response": response_text,
-            "mode": mode,
-            "request_scope": request_scope,
-            "selected_label": selected_label,
-            "selected_label_id": selected_label_id,
-            "selected_candidate_index": selected_candidate_index,
+        out_of_scope_actions = {
+            "walk",
+            "run",
+            "dance",
+            "climb",
+            "fly",
+            "swim",
+            "cook",
+            "drive",
+            "call",
+            "sing",
+            "open",
+            "close",
+            "pet",
+            "hug",
+            "jump",
+            "skip",
+            "ride",
+        }
+        in_scope_actions = {
+            "pick",
+            "grab",
+            "bring",
+            "fetch",
+            "show",
+            "give",
+            "hold",
+            "take",
+            "move",
+        }
+        chat_markers = {
+            "how are you",
+            "hello",
+            "hi",
+            "hey",
+            "good morning",
+            "good evening",
+            "what's your name",
+            "who are you",
+            "thank you",
+            "thanks",
+            "do you like",
         }
 
-    @staticmethod
-    def _pluralize(label: str, count: int) -> str:
-        if count == 1:
-            return label
-        if label.endswith("s"):
-            return label
-        return f"{label}s"
+        if any(token in text for token in out_of_scope_actions):
+            return {"needs_vision": False, "mode": "out_of_scope"}
+        if any(token in text for token in in_scope_actions):
+            return {"needs_vision": True, "mode": "clarification"}
+        if any(token in text for token in chat_markers):
+            return {"needs_vision": False, "mode": "conversing"}
+
+        return {"needs_vision": True, "mode": "clarification"}
+
+    def _parse_response(self, raw_response: str) -> dict:
+        """Parse model response JSON through formatter."""
+        return self.formatter.parse_response(raw_response)
 
     def _find_requested_label(self, transcription: str, candidates: list[dict]) -> Optional[str]:
-        text = str(transcription or "").strip().lower()
-        if not text or not candidates:
-            return None
-
-        label_counts: dict[str, int] = {}
-        for candidate in candidates:
-            label = str(candidate.get("label") or "").strip().lower()
-            if label:
-                label_counts[label] = label_counts.get(label, 0) + 1
-
-        for label in label_counts:
-            if label in text:
-                return label
-
-        return None
+        return self.formatter.find_requested_label(transcription, candidates)
 
     @staticmethod
     def _is_disambiguation_followup(transcription: str) -> bool:
-        text = str(transcription or "").strip().lower()
-        if not text:
-            return False
-        hints = [
-            "left",
-            "right",
-            "top",
-            "bottom",
-            "closest",
-            "farthest",
-            "one",
-            "this",
-            "that",
-        ]
-        return any(hint in text for hint in hints)
+        return SLM_Formatter.is_disambiguation_followup(transcription)
 
     def _select_active_candidates(self, transcription: str, candidates: list[dict]) -> list[dict]:
-        if not candidates:
-            return []
-
-        explicit_label = self._find_requested_label(transcription, candidates)
-        if explicit_label:
-            return [c for c in candidates if str(c.get("label") or "").strip().lower() == explicit_label]
-
-        if self.pending_label and self._is_disambiguation_followup(transcription):
-            narrowed = [
-                c for c in candidates if str(c.get("label") or "").strip().lower() == self.pending_label
-            ]
-            if narrowed:
-                return narrowed
-
-        return candidates
+        return self.formatter.select_active_candidates(
+            transcription=transcription,
+            candidates=candidates,
+            pending_label=self.pending_label,
+        )
 
     def _sanitize_output(
         self,
@@ -419,110 +298,71 @@ class SLM_Manager:
         transcription: str,
         candidates: list[dict],
     ) -> dict:
-        response_text = str(parsed.get("response") or "").strip()
-        normalized = response_text.lower()
-        requested_label = self._find_requested_label(transcription, candidates) or self.pending_label
+        return self.formatter.sanitize_output(
+            parsed=parsed,
+            transcription=transcription,
+            candidates=candidates,
+            pending_label=self.pending_label,
+        )
 
-        if not response_text or normalized in {"...", "…"}:
-            if parsed.get("mode") == "confirmation":
-                parsed["response"] = "Understood. I will pick that object."
-            else:
-                if requested_label:
-                    count = sum(
-                        1 for c in candidates if str(c.get("label") or "").strip().lower() == requested_label
-                    )
-                    if count > 1:
-                        parsed["response"] = (
-                            f"I found {count} {self._pluralize(requested_label, count)}. "
-                            "Which one would you like? (e.g., left, right, closest, farthest?)"
-                        )
-                        parsed["mode"] = "clarification"
-                    elif count == 1:
-                        only = next(
-                            c for c in candidates if str(c.get("label") or "").strip().lower() == requested_label
-                        )
-                        parsed["response"] = f"I found one {requested_label}. I can pick it now."
-                        parsed["mode"] = "confirmation"
-                        parsed["selected_candidate_index"] = only.get("index")
-                        parsed["selected_label"] = only.get("label")
-                        parsed["selected_label_id"] = only.get("label_id")
-                    else:
-                        parsed["response"] = "I need more details to identify the object."
-                        parsed["mode"] = "clarification"
-                else:
-                    parsed["response"] = "I need more details to identify the object."
-                    parsed["mode"] = "clarification"
-
-        if parsed.get("mode") == "clarification" and (
-            "don't see" in normalized or "do not see" in normalized
-        ) and requested_label:
-            count = sum(
-                1 for c in candidates if str(c.get("label") or "").strip().lower() == requested_label
+    def _fallback_mode_response(self, mode: str, transcription: str, detections: list[str]) -> str:
+        if mode == "conversing":
+            return "I'm doing well, thanks for asking!"
+        if mode == "out_of_scope":
+            seen = ", ".join(detections) if detections else "no objects right now"
+            return (
+                "I'm sorry, I can't do that action. "
+                f"I'm a robotic arm and can pick, grab, or bring objects. I can see: {seen}."
             )
-            if count > 1:
-                parsed["response"] = (
-                    f"I found {count} {self._pluralize(requested_label, count)}. "
-                    "Which one would you like? (e.g., left, right, closest, farthest?)"
-                )
-            elif count == 1:
-                only = next(
-                    c for c in candidates if str(c.get("label") or "").strip().lower() == requested_label
-                )
-                parsed["response"] = f"I found one {requested_label}. I can pick it now."
-                parsed["mode"] = "confirmation"
-                parsed["selected_candidate_index"] = only.get("index")
-                parsed["selected_label"] = only.get("label")
-                parsed["selected_label_id"] = only.get("label_id")
-            else:
-                parsed["mode"] = "reformulate"
-                parsed["response"] = (
-                    "I don't see that object. Could you describe it differently?"
-                )
+        if mode == "repeat":
+            return "I didn't catch that. Could you repeat?"
+        if mode == "stop":
+            return "Alright, cancelling."
+        if mode == "inappropriate":
+            return "I can't help with that. Please ask something safe."
+        if mode == "unclear_action":
+            return "I couldn't understand the action. Could you ask me to pick, grab, or bring an object?"
+        return "Could you rephrase your request?"
 
-        if parsed.get("mode") == "confirmation" and parsed.get("selected_candidate_index") is None:
-            if requested_label:
-                same = [
-                    c for c in candidates if str(c.get("label") or "").strip().lower() == requested_label
-                ]
-                if len(same) == 1:
-                    parsed["selected_candidate_index"] = same[0].get("index")
-                    parsed["selected_label"] = same[0].get("label")
-                    parsed["selected_label_id"] = same[0].get("label_id")
-                elif len(same) > 1:
-                    parsed["mode"] = "clarification"
-                    parsed["response"] = (
-                        f"I found {len(same)} {self._pluralize(requested_label, len(same))}. "
-                        "Which one would you like? (e.g., left, right, closest, farthest?)"
-                    )
-                    parsed["selected_label"] = None
-                    parsed["selected_label_id"] = None
-        return parsed
-
-    def _chat_non_stream(self) -> tuple[str, str]:
-        fallback = self.client.chat(
-            model=self.model_name,
-            messages=self.history,
-            stream=False,
-            think=True,
-            format=self.response_schema,
-            options={"temperature": self.temperature, "num_predict": self.num_predict},
+    def respond_from_mode_hint(self, mode: str, transcription: str, detections: Optional[list[str]] = None) -> dict:
+        detections = detections or []
+        system_prompt = (
+            "You are a concise robotic-arm assistant. "
+            "Write exactly one short, natural sentence for the user based on the provided mode."
         )
-        data = self._as_dict(fallback)
-        message = self._as_dict(data.get("message", {}))
-        return str(message.get("thinking") or ""), str(message.get("content") or "")
-
-    def _chat_tensorrt(self) -> tuple[str, str]:
-        if not (self.prefer_tensorrt and self.trt_ready and self.trt_engine):
-            return "", ""
-
-        response = self.trt_engine.chat(
-            messages=self.history,
-            max_new_tokens=self.num_predict,
-            temperature=self.temperature,
+        user_prompt = (
+            f"Mode: {mode}\\n"
+            f"User transcription: {transcription}\\n"
+            f"Detected objects: {detections}\\n"
+            "Rules: never output JSON, never output mode name, be polite and practical."
         )
-        data = self._as_dict(response)
-        message = self._as_dict(data.get("message", {}))
-        return "", str(message.get("content") or "")
+
+        try:
+            text = self.chat_controller.chat_non_stream_text(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=100,
+            )
+        except Exception as exc:
+            self._debug_log(f"mode response fallback due to error: {exc}")
+            text = ""
+
+        if not text:
+            text = self._fallback_mode_response(mode=mode, transcription=transcription, detections=detections)
+
+        if mode == "stop":
+            self.reset_conversation()
+
+        self.pending_label = None
+        return {
+            "response": text,
+            "mode": mode,
+            "selected_label": None,
+            "selected_label_id": None,
+            "selected_candidate_index": None,
+        }
 
     def run_inference(self) -> dict:
         """Run inference on current transcription and detections."""
@@ -535,30 +375,26 @@ class SLM_Manager:
             return {
                 "response": "I didn't hear a command. Could you repeat?",
                 "mode": "repeat",
-                "request_scope": "in_scope",
                 "selected_label": None,
                 "selected_label_id": None,
                 "selected_candidate_index": None,
             }
 
-        # Early exit for missing detections
-        if not detections:
-            return {
-                "response": "I don't see any relevant object. Could you clarify?",
-                "mode": "reformulate",
-                "request_scope": "in_scope",
-                "selected_label": None,
-                "selected_label_id": None,
-                "selected_candidate_index": None,
-            }
+        detections = detections or []
+        candidates = candidates or []
 
-        active_candidates = self._select_active_candidates(transcription, candidates or [])
+        active_candidates = self._select_active_candidates(transcription, candidates)
 
         # Build prompt and add to history
-        prompt = self._build_prompt(transcription, detections, active_candidates)
+        prompt = self.formatter.build_prompt(
+            transcription=transcription,
+            detections=detections,
+            candidates=active_candidates,
+            pending_label=self.pending_label,
+        )
         self._debug_log(
             f"prompt_build transcription={repr(transcription[:80])} "
-            f"detections={len(detections)} candidates={len(candidates or [])}"
+            f"detections={len(detections)} candidates={len(candidates)}"
         )
 
         self.history.append({"role": "user", "content": prompt})
@@ -568,49 +404,37 @@ class SLM_Manager:
             thinking = ""
             content = ""
 
-            if self.prefer_tensorrt and self.trt_ready and self.trt_engine:
+            if self.prefer_tensorrt and self.tensorrt_manager.ready:
                 try:
-                    _, trt_content = self._chat_tensorrt()
-                    content = trt_content or ""
+                    content = self.tensorrt_manager.chat(
+                        messages=self.history,
+                        max_new_tokens=self.num_predict,
+                        temperature=self.temperature,
+                    ) or ""
                     self._debug_log(f"tensorrt_response_len={len(content)}")
                 except Exception as exc:
                     self._debug_log(f"tensorrt_error={exc}")
                     # Runtime TensorRT failures should not silently fallback when TensorRT is detected.
                     raise
 
-            # If TensorRT is unavailable or returned empty, use Ollama stream.
+            # If TensorRT is unavailable or returned empty, use Ollama JSON chat.
             if not content.strip():
-                stream = self.client.chat(
-                    model=self.model_name,
-                    messages=self.history,
-                    stream=True,
-                    think=True,
-                    format=self.response_schema,
-                    options={"temperature": self.temperature, "num_predict": self.num_predict},
-                )
-
-                in_thinking = False
-
-                for chunk in stream:
-                    chunk_data = self._as_dict(chunk)
-                    message = self._as_dict(chunk_data.get("message", {}))
-                    chunk_thinking = str(message.get("thinking") or "")
-                    chunk_content = str(message.get("content") or "")
-
-                    if chunk_thinking:
-                        if self.debug and not in_thinking:
-                            print("[SLM_DEBUG] Thinking:")
-                            in_thinking = True
-                        if self.debug:
-                            print(chunk_thinking, end="", flush=True)
-                        thinking += chunk_thinking
-                    elif chunk_content:
-                        if self.debug and in_thinking:
-                            print("\n[SLM_DEBUG] Answer:")
-                            in_thinking = False
-                        if self.debug:
-                            print(chunk_content, end="", flush=True)
-                        content += chunk_content
+                if self.stream_json:
+                    thinking, content = self.chat_controller.chat_stream_json(
+                        messages=self.history,
+                        schema=self.response_schema,
+                    )
+                else:
+                    thinking, content = self.chat_controller.chat_non_stream_json(
+                        messages=self.history,
+                        schema=self.response_schema,
+                    )
+                    if self.debug and thinking.strip():
+                        print("[SLM_DEBUG] Thinking:")
+                        print(thinking)
+                    if self.debug and content.strip():
+                        print("[SLM_DEBUG] Answer:")
+                        print(content)
 
             if self.debug and (thinking or content):
                 print("")
@@ -620,7 +444,10 @@ class SLM_Manager:
             # Fallback if stream produced thinking but no answer tokens.
             if not content.strip():
                 self._debug_log("empty stream content, retrying non-stream without thinking")
-                _, retry_content = self._chat_non_stream()
+                _, retry_content = self.chat_controller.chat_non_stream_json(
+                    messages=self.history,
+                    schema=self.response_schema,
+                )
                 content = retry_content or content
 
             # Add assistant response to history for dialog continuity
@@ -642,11 +469,12 @@ class SLM_Manager:
                 if parsed["mode"] == "stop":
                     self.reset_conversation()
 
-                if parsed["mode"] in {"stop", "confirmation"}:
-                    self.pending_label = None
-                elif parsed["mode"] == "clarification":
+                if parsed["mode"] == "clarification":
                     requested_label = self._find_requested_label(transcription, active_candidates)
                     self.pending_label = requested_label or self.pending_label
+                else:
+                    # Only keep pending label across clarification turns.
+                    self.pending_label = None
 
                 return parsed
             else:
@@ -654,7 +482,6 @@ class SLM_Manager:
                 return {
                     "response": "I didn't understand. Could you repeat?",
                     "mode": "clarification",
-                    "request_scope": "in_scope",
                     "selected_label": None,
                     "selected_label_id": None,
                     "selected_candidate_index": None,
@@ -665,7 +492,6 @@ class SLM_Manager:
             return {
                 "response": "I had trouble processing that. Could you repeat?",
                 "mode": "clarification",
-                "request_scope": "in_scope",
                 "selected_label": None,
                 "selected_label_id": None,
                 "selected_candidate_index": None,
@@ -676,13 +502,9 @@ class SLM_Manager:
 
     def load_model(self) -> None:
         """Check that model is available (simple validation)."""
-        if self.prefer_tensorrt and self.trt_ready and self.trt_engine:
+        if self.prefer_tensorrt and self.tensorrt_manager.ready:
             try:
-                self.trt_engine.chat(
-                    messages=[{"role": "user", "content": "Reply with {}."}],
-                    max_new_tokens=8,
-                    temperature=0.0,
-                )
+                self.tensorrt_manager.warmup()
                 self._debug_log("TensorRT backend is ready")
                 return
             except Exception as exc:

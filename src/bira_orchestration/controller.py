@@ -82,6 +82,21 @@ class BiraController:
             user_input = context.user_inputs[-1]
         else:
             user_input = None
+        mode_hint = context.route_mode_hint
+        if context.skip_vision_for_current_input and mode_hint in {
+            "conversing",
+            "out_of_scope",
+            "repeat",
+            "stop",
+            "inappropriate",
+            "unclear_action",
+        }:
+            return self.slm_manager.respond_from_mode_hint(
+                mode=mode_hint,
+                transcription=user_input or "",
+                detections=[],
+            )
+
         detected_objects = context.objects_detected if context.objects_detected else None
 
         self.slm_manager.set_transcription(user_input or "")
@@ -92,6 +107,10 @@ class BiraController:
         )
 
         return self.slm_manager.run_inference()
+
+    def route_request(self, context):
+        user_input = context.user_inputs[-1] if context.user_inputs else ""
+        return self.slm_manager.route_request(user_input)
     
     def destroy(self):
         components = [

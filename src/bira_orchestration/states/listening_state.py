@@ -37,7 +37,14 @@ class ListeningState(State):
                 }:
                     new_state = StateCode.PLANNING
                 else:
-                    new_state = StateCode.VISION
+                    route = self.bira_manager.controller.route_request(context)
+                    context.skip_vision_for_current_input = bool(route.get("needs_vision") is False)
+                    context.route_mode_hint = route.get("mode")
+                    if context.skip_vision_for_current_input:
+                        print(f"Routing decision: skip vision (mode_hint={context.route_mode_hint}).")
+                        new_state = StateCode.PLANNING
+                    else:
+                        new_state = StateCode.VISION
             case ListeningCode.NO_INPUT:
                 print("No voice input received.")
                 feedback = "Je n'ai pas entendu votre commande. Je vais me remettre en veille."
