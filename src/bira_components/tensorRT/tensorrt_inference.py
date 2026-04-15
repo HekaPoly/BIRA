@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import shlex
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -72,6 +73,13 @@ class TensorRTInferenceEngine:
             return [str(part) for part in configured]
         if isinstance(configured, str) and configured.strip():
             return shlex.split(configured)
+
+        for candidate in ("trtllm-serve", "trtllm", "tensorrt_llm"):
+            resolved = shutil.which(candidate)
+            if resolved:
+                logger.info("TensorRT runner auto-detected: %s", resolved)
+                return [resolved]
+
         return []
 
     def load_engine(self) -> bool:

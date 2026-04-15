@@ -43,7 +43,7 @@ class TensorRT_Manager:
                 self.engine = None
                 print(
                     f"TensorRT engine not ready in {self.engine_dir}. "
-                    "The config is missing runtime.runner_command, so Ollama will be used instead."
+                    "No local TensorRT runner was detected, so Ollama will be used instead."
                 )
         except Exception as exc:
             self.ready = False
