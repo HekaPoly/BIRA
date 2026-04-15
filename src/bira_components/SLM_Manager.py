@@ -30,6 +30,8 @@ class SLM_Manager:
         mode: str = "local",
         api_key: Optional[str] = None,
         tensorrt_engine_dir: Optional[str] = None,
+        debug: Optional[bool] = None,
+        stream_json: Optional[bool] = None,
     ):
         self.model_name = model_name
         self.temperature = temperature
@@ -38,8 +40,8 @@ class SLM_Manager:
         self.detections = None
         self.detection_candidates = None
         self.transcription = None
-        self.debug = _env_flag("SLM_DEBUG", default=False)
-        self.stream_json = _env_flag("SLM_STREAM", default=False)
+        self.debug = _env_flag("SLM_DEBUG", default=False) if debug is None else debug
+        self.stream_json = _env_flag("SLM_STREAM", default=True) if stream_json is None else stream_json
         self.num_predict = int(os.getenv("SLM_NUM_PREDICT", "900"))
         self.pending_label: Optional[str] = None
         self.prefer_tensorrt = True
@@ -150,10 +152,17 @@ class SLM_Manager:
         if not text:
             return {"needs_vision": False, "mode": "repeat"}
 
-        thinking, content = self.chat_controller.chat_non_stream_json(
-            messages=self.formatter.build_route_messages(text),
-            schema=self.formatter.route_schema,
-        )
+        messages = self.formatter.build_route_messages(text)
+        if self.stream_json:
+            thinking, content = self.chat_controller.chat_stream_json(
+                messages=messages,
+                schema=self.formatter.route_schema,
+            )
+        else:
+            thinking, content = self.chat_controller.chat_non_stream_json(
+                messages=messages,
+                schema=self.formatter.route_schema,
+            )
         if self.debug and thinking.strip():
             print("[SLM_DEBUG] Router thinking:")
             print(thinking)
@@ -233,7 +242,7 @@ class SLM_Manager:
             thinking = ""
             content = ""
 
-            if self.prefer_tensorrt and self.tensorrt_manager.ready:
+            if self.prefer_tensorrt and self.tensorrt_manager.ready and not self.stream_json:
                 try:
                     content = self.tensorrt_manager.chat(
                         messages=self.history,

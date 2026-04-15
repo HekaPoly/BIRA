@@ -93,7 +93,7 @@ class PlanningState(State):
 
         # Now prompt SLM with available vision data (or empty if not needed).
         response = self.bira_manager.controller.prompt_slm(context)
-        feedback = response.get("response", "Je n'ai pas compris la demande.")
+        feedback = response.get("response", "I didn't understand the request.")
         mode = response.get("mode", "clarification")
         context.feedback_source = response.get("feedback_source", "slm_feedback")
 

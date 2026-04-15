@@ -46,11 +46,11 @@ class VisionState(State):
                 detection_labels = self.bira_manager.get_data().detection_labels or []
                 cv = self.bira_manager.controller.computer_vision
                 label_names = [cv.get_label_name(label_id) for label_id in detection_labels]
-                feedback = f"J'ai détecté les objets suivants: {', '.join(label_names)}."
+                feedback = f"I detected the following objects: {', '.join(label_names)}."
                 new_state = StateCode.PLANNING
             case VisionCode.NO_OBJECT_DETECTED:
                 self.log_state("No objects detected.")
-                feedback = "Je n'ai détecté aucun objet. Veuillez réessayer."
+                feedback = "I didn't detect any objects. Please try again."
                 new_state = StateCode.LISTENING
             case _:
                 self.log_state("Unknown vision code. Transitioning to exit state for safety.")

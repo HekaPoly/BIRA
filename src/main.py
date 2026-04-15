@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 
 from bira_orchestration.manager import BiraManager
-    
+
+
 def main():
     models_dir = Path(__file__).resolve().parents[1] / "models"
 
@@ -18,21 +19,48 @@ def main():
         help='Run with mocked Camera/ComputerVision/Micro/STT/TTS and keep only SLM active.',
     )
     parser.add_argument(
-        '--SLM_DEBUG',
+        '--mode',
+        choices=['local', 'cloud'],
+        default='local',
+        help='Select the SLM backend mode.',
+    )
+    parser.add_argument(
+        '--api-key',
+        dest='api_key',
+        default=None,
+        help='API key for cloud mode.',
+    )
+    parser.add_argument(
         '--slm-debug',
-        dest='slm_debug',
         action='store_true',
-        help='Enable verbose SLM diagnostics (prompt metadata and Ollama done_reason).',
+        help='Enable verbose SLM diagnostics.',
+    )
+    parser.add_argument(
+        '--slm-stream',
+        '--no-slm-stream',
+        dest='slm_stream',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='Enable streamed SLM output in the terminal.',
     )
 
     opt = parser.parse_args()
     if opt.slm_debug:
         os.environ['SLM_DEBUG'] = '1'
-    bira_manager = BiraManager(mock_mode=opt.mock)
+    if not opt.slm_stream:
+        os.environ['SLM_STREAM'] = '0'
+
+    bira_manager = BiraManager(
+        mock_mode=opt.mock,
+        slm_mode=opt.mode,
+        slm_debug=opt.slm_debug,
+        slm_stream=opt.slm_stream,
+        api_key=opt.api_key,
+    )
     bira_manager.preload()
     bira_manager.run()
-    
+
     
 if __name__ == "__main__":
     main()
-    
+

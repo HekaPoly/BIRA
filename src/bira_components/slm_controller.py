@@ -52,21 +52,19 @@ class SLM_Controller:
             chunk_content = str(message.get("content") or "")
 
             if chunk_thinking:
-                if self.debug and not in_thinking:
-                    print("[SLM_DEBUG] Thinking:")
+                if not in_thinking:
+                    print("[SLM_THINKING]")
                     in_thinking = True
-                if self.debug:
-                    print(chunk_thinking, end="", flush=True)
+                print(chunk_thinking, end="", flush=True)
                 thinking += chunk_thinking
             elif chunk_content:
-                if self.debug and in_thinking:
-                    print("\n[SLM_DEBUG] Answer:")
+                if in_thinking:
+                    print("\n[SLM_ANSWER]")
                     in_thinking = False
-                if self.debug:
-                    print(chunk_content, end="", flush=True)
+                print(chunk_content, end="", flush=True)
                 content += chunk_content
 
-        if self.debug and (thinking or content):
+        if thinking or content:
             print("")
 
         self._debug_log(f"response_len={len(content)}")

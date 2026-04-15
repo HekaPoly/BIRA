@@ -47,5 +47,5 @@ if __name__== "__main__":
     tts = TextToSpeech(voice="fr+f3")
     print("Testing TTS...", flush=True)
 
-    text = "Voici les objets que j'ai détectés : person, ordinateur portable, ... etc."
+    text = "Here are the objects I detected: person, laptop, etc."
     tts.speak(text)

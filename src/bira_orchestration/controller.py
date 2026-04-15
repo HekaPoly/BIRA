@@ -11,7 +11,7 @@ from bira_orchestration.enums import PlanificationCode
 
 
 class BiraController:
-    def __init__(self):
+    def __init__(self, slm_mode: str = "local", slm_debug: bool = False, slm_stream: bool = True, api_key=None):
         self.camera = Camera()
         # TODO: We should not pass the camera to the computer vision. We should have a better way to share data between
         #  components. Maybe we can have a shared memory or a shared database where the camera can write the frames and
@@ -22,7 +22,12 @@ class BiraController:
         self.micro = Micro()
         self.text_to_speech = TextToSpeech()
         self.speech_to_text = SpeechToText()
-        self.slm_manager = SLM_Manager(mode="local")
+        self.slm_manager = SLM_Manager(
+            mode=slm_mode,
+            debug=slm_debug,
+            stream_json=slm_stream,
+            api_key=api_key,
+        )
 
     def preload_components(self):
         preload_steps = [

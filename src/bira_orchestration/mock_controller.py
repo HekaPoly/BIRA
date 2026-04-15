@@ -35,7 +35,7 @@ class _MockDetectedObject:
 
 
 class MockedBiraController:
-    def __init__(self):
+    def __init__(self, slm_mode: str = "local", slm_debug: bool = False, slm_stream: bool = True, api_key=None):
         print("[MOCK MODE] Hardware/audio components are mocked. SLM remains active.")
         self.camera = None
         self.computer_vision = _MockComputerVision()
@@ -43,7 +43,12 @@ class MockedBiraController:
         self.micro = None
         self.text_to_speech = None
         self.speech_to_text = None
-        self.slm_manager = SLM_Manager(mode="local")
+        self.slm_manager = SLM_Manager(
+            mode=slm_mode,
+            debug=slm_debug,
+            stream_json=slm_stream,
+            api_key=api_key,
+        )
 
     def preload_components(self):
         preload_steps = [

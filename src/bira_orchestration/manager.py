@@ -17,15 +17,32 @@ STATE_CLASSES = {
 }
 
 class BiraManager:
-    def __init__(self, mock_mode: bool = False):
+    def __init__(
+        self,
+        mock_mode: bool = False,
+        slm_mode: str = "local",
+        slm_debug: bool = False,
+        slm_stream: bool = True,
+        api_key: str | None = None,
+    ):
         if mock_mode:
             from bira_orchestration.mock_controller import MockedBiraController
 
-            self.controller = MockedBiraController()
+            self.controller = MockedBiraController(
+                slm_mode=slm_mode,
+                slm_debug=slm_debug,
+                slm_stream=slm_stream,
+                api_key=api_key,
+            )
         else:
             from bira_orchestration.controller import BiraController
 
-            self.controller = BiraController()
+            self.controller = BiraController(
+                slm_mode=slm_mode,
+                slm_debug=slm_debug,
+                slm_stream=slm_stream,
+                api_key=api_key,
+            )
         self.state = IdleState(self)
         self._context = BiraContext()
         self.counter = 0
