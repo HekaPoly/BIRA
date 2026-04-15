@@ -72,8 +72,13 @@ class BiraController:
         # EXAMPLE: Simulate an execution process that takes some time and is successful
         sleep(2)
     
-    def speak(self, text):
-        print(f"Bira Speaking: {text}")
+    def speak(self, text, source: str = "state_log"):
+        source_tag = {
+            "state_log": "State log",
+            "fallback_feedback": "Fallback feedback",
+            "slm_feedback": "SLM_feedback",
+        }.get(source, source)
+        print(f"[{source_tag}] Bira Speaking: {text}")
         self.text_to_speech.speak(text)
     
     def prompt_slm(self, context):

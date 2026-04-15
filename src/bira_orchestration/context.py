@@ -21,6 +21,7 @@ class BiraContext:
     execution_code: ExecutionCode = ExecutionCode.NO_RESPONSE
     skip_vision_for_current_input: bool = False
     route_mode_hint: str | None = None
+    feedback_source: str = "state_log"
 
     def reset_all(self) -> None:
         self.objects_detected.clear()
@@ -30,6 +31,7 @@ class BiraContext:
         self.object_selected = None
         self.skip_vision_for_current_input = False
         self.route_mode_hint = None
+        self.feedback_source = "state_log"
         self.reset_codes()
 
     def reset_codes(self) -> None:
@@ -42,6 +44,7 @@ class BiraContext:
         self.vision_code = VisionCode.NO_RESPONSE
         self.skip_vision_for_current_input = False
         self.route_mode_hint = None
+        self.feedback_source = "state_log"
 
     def reset_for_vision(self) -> None:
         self.objects_detected.clear()

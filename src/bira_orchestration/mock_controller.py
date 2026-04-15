@@ -111,8 +111,13 @@ class MockedBiraController:
         print(f"[MOCK:EXECUTION] Pretending to execute grasp action on: {label_name}")
         sleep(0.3)
 
-    def speak(self, text):
-        print(f"\n=== BIRA_FEEDBACK ===\n{text}\n=====================\n")
+    def speak(self, text, source: str = "state_log"):
+        source_tag = {
+            "state_log": "State log",
+            "fallback_feedback": "Fallback feedback",
+            "slm_feedback": "SLM_feedback",
+        }.get(source, source)
+        print(f"\n=== BIRA_FEEDBACK [{source_tag}] ===\n{text}\n=====================\n")
 
     def prompt_slm(self, context):
         if context.user_inputs:

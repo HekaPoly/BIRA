@@ -69,14 +69,14 @@ class BiraManager:
 
     def change_state(self, next_code: StateCode):
         if next_code < self.state.code:
-            print(f"Warning: Transitioning to a previous state ({next_code} < {self.state.code})")
+            print(f"[State log] Warning: Transitioning to a previous state ({next_code} < {self.state.code})")
             self.counter += 1
             if self.counter > 3:
-                print("Looped three times. Forced exit.")
+                print("[State log] Looped three times. Forced exit.")
                 next_code = StateCode.EXIT
         state_cls = STATE_CLASSES[next_code]
         self.state = state_cls(self)
-        print(f"\nEntering {self.state} (Code {self.state.code})")
+        print(f"\n[State log] Entering {self.state} (Code {self.state.code})")
 
     def run(self):
         while True:

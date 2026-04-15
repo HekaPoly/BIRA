@@ -22,25 +22,24 @@ class ListeningState(State):
 
         match listening_code:
             case ListeningCode.ERROR:
-                print("Error occurred during listening processing.")
+                self.log_state("Error occurred during listening processing.")
                 new_state = StateCode.EXIT
             case ListeningCode.NO_RESPONSE:
-                print("Listening has not been done yet. System is not supposed to be in this state.")
+                self.log_state("Listening has not been done yet. System is not supposed to be in this state.")
                 new_state = StateCode.EXIT
             case ListeningCode.SUCCESS:
-                print("Listening processing successful.")
+                self.log_state("Listening processing successful.")
                 feedback = f"Vous m'avez demandé: {self.bira_manager.get_last_user_input()}."
                 # Always transition to Planning; Planning will decide if vision is needed.
                 new_state = StateCode.PLANNING
             case ListeningCode.NO_INPUT:
-                print("No voice input received.")
+                self.log_state("No voice input received.")
                 feedback = "Je n'ai pas entendu votre commande. Je vais me remettre en veille."
                 new_state = StateCode.IDLE
             case _:
-                print("Unknown listening code. Transitioning to exit state for safety.")
+                self.log_state("Unknown listening code. Transitioning to exit state for safety.")
                 new_state = StateCode.EXIT
 
         if feedback:
-            self.bira_manager.add_feedback(feedback)
-            self.bira_manager.controller.speak(feedback)
+            self.emit_feedback(feedback, source="state_log")
         self.bira_manager.change_state(new_state)

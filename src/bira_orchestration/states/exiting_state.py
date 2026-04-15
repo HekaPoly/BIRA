@@ -17,11 +17,10 @@ class ExitState(State):
         # Perform actions specific to Exit state
         # For example, clean up resources, save state, or perform any necessary shutdown procedures
         feedback = "Une erreur est survenue. Je vais devoir m'arrêter. Veuillez vérifier le système et réessayer."
-        self.bira_manager.add_feedback(feedback)
-        self.bira_manager.controller.speak(feedback)
+        self.emit_feedback(feedback, source="state_log")
         self.bira_manager.controller.destroy()
 
     def _decide_next_state(self):
         # No next state to transition to since this is the exit state
-        print("Exiting the system. Cleaning up resources and shutting down.")
+        self.log_state("Exiting the system. Cleaning up resources and shutting down.")
         exit(0)

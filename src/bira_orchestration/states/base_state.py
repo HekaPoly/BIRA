@@ -19,6 +19,14 @@ class State(ABC):
         self._prepare()
         self._handle()
         self._decide_next_state()
+
+    def log_state(self, message: str) -> None:
+        print(f"[State log] {message}")
+
+    def emit_feedback(self, feedback: str, source: str = "state_log") -> None:
+        self.bira_manager.add_feedback(feedback)
+        self.bira_manager.get_data().feedback_source = source
+        self.bira_manager.controller.speak(feedback, source=source)
     
     @abstractmethod
     def __str__(self):

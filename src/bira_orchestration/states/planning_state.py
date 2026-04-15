@@ -60,7 +60,7 @@ class PlanningState(State):
 
         # Run vision inline if needed and not already executed.
         if needs_vision and not context.objects_detected:
-            print(f"Planning: Vision needed for '{user_input[:60]}...'")
+            self.log_state(f"Planning: Vision needed for '{user_input[:60]}...'")
             try:
                 sl_object, detection_labels = self.bira_manager.controller.vision()
                 context.objects_detected = sl_object.object_list
@@ -70,24 +70,27 @@ class PlanningState(State):
                     confidence = obj.confidence
                     position_3d = obj.position
                     bbox_2d = obj.bounding_box_2d
-                    print(f"  Object ID: {obj_id}, Confidence: {confidence}, Position: {position_3d}, BBox: {bbox_2d}")
+                    self.log_state(
+                        f"  Object ID: {obj_id}, Confidence: {confidence}, Position: {position_3d}, BBox: {bbox_2d}"
+                    )
                 if not context.objects_detected:
-                    print("  No objects detected.")
+                    self.log_state("  No objects detected.")
                 else:
                     cv = self.bira_manager.controller.computer_vision
                     label_names = [cv.get_label_name(label_id) for label_id in context.detection_labels]
-                    print(f"  Detected: {', '.join(label_names)}")
+                    self.log_state(f"  Detected: {', '.join(label_names)}")
             except Exception as exc:
-                print(f"Vision error: {exc}")
+                self.log_state(f"Vision error: {exc}")
                 context.objects_detected = []
                 context.detection_labels = []
         elif not needs_vision:
-            print(f"Planning: No vision needed for '{user_input[:60]}...' (mode_hint={mode_hint})")
+            self.log_state(f"Planning: No vision needed for '{user_input[:60]}...' (mode_hint={mode_hint})")
 
         # Now prompt SLM with available vision data (or empty if not needed).
         response = self.bira_manager.controller.prompt_slm(context)
         feedback = response.get("response", "Je n'ai pas compris la demande.")
         mode = response.get("mode", "clarification")
+        context.feedback_source = response.get("feedback_source", "slm_feedback")
 
         # Route based on SLM's mode decision (which has already validated the logic)
         if mode == "stop":
@@ -105,6 +108,7 @@ class PlanningState(State):
                 return
             # Fallback (shouldn't happen if SLM is correct)
             self.bira_manager.add_feedback("Erreur: objet non trouvé malgré la confirmation.")
+            context.feedback_source = "fallback_feedback"
             context.planification_code = PlanificationCode.UNDETECTED_OBJECT
             return
 
@@ -155,56 +159,56 @@ class PlanningState(State):
 
         match planification_code:
             case PlanificationCode.ERROR:
-                print("Error occurred during planification processing.")
+                self.log_state("Error occurred during planification processing.")
                 new_state = StateCode.EXIT
             case PlanificationCode.NO_RESPONSE:
-                print("Planification has not been done yet. System is not supposed to be in this state.")
+                self.log_state("Planification has not been done yet. System is not supposed to be in this state.")
                 new_state = StateCode.EXIT
             case PlanificationCode.SUCCESS:
-                print("Planification processing successful.")
+                self.log_state("Planification processing successful.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.EXECUTING
             case PlanificationCode.UNCLEAR_COMMAND:
-                print("Unclear command. User needs to reformulate.")
+                self.log_state("Unclear command. User needs to reformulate.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.INAPPROPRIATE_REQUEST:
-                print("Inappropriate request. Content is not allowed.")
+                self.log_state("Inappropriate request. Content is not allowed.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.OUT_OF_SCOPE_REQUEST:
-                print("Out-of-scope action. User should ask for a supported robotic-arm task.")
+                self.log_state("Out-of-scope action. User should ask for a supported robotic-arm task.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.UNDETECTED_OBJECT:
-                print("Object not detected. Vision needs to be redone.")
+                self.log_state("Object not detected. Vision needs to be redone.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.VISION
             case PlanificationCode.REPEAT_REQUEST:
-                print("User needs to repeat the command.")
+                self.log_state("User needs to repeat the command.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.NEED_MORE_INFO:
-                print("More information needed to identify the object.")
+                self.log_state("More information needed to identify the object.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.REFORMULATE_REQUEST:
-                print("Requested object not found. User needs to reformulate.")
+                self.log_state("Requested object not found. User needs to reformulate.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.CONVERSING:
-                print("Conversational exchange only. Returning to listening.")
+                self.log_state("Conversational exchange only. Returning to listening.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.IDLE:
-                print("Idle state reached in planification. Transitioning to RespondingState with feedback.")
+                self.log_state("Idle state reached in planification. Transitioning to RespondingState with feedback.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.IDLE
             case _:
-                print("Unknown planification code. Transitioning to exit state for safety.")
+                self.log_state("Unknown planification code. Transitioning to exit state for safety.")
                 new_state = StateCode.EXIT
 
         if feedback:
             self.bira_manager.add_feedback(feedback)
-            self.bira_manager.controller.speak(feedback)
+            self.bira_manager.controller.speak(feedback, source=self.bira_manager.get_data().feedback_source)
         self.bira_manager.change_state(new_state)

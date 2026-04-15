@@ -22,33 +22,32 @@ class ExecutingState(State):
 
         match execution_code:
             case ExecutionCode.ERROR:
-                print("Error occurred during execution processing.")
+                self.log_state("Error occurred during execution processing.")
                 new_state = StateCode.EXIT
             case ExecutionCode.NO_RESPONSE:
-                print("Execution has not been done yet. System is not supposed to be in this state.")
+                self.log_state("Execution has not been done yet. System is not supposed to be in this state.")
                 new_state = StateCode.EXIT
             case ExecutionCode.SUCCESS:
-                print("Execution processing successful.")
+                self.log_state("Execution processing successful.")
                 feedback = "J'ai exécuté la tâche demandée. Voulez-vous que je fasse autre chose ?"
                 new_state = StateCode.LISTENING
             case ExecutionCode.UNABLE_TO_MOVE:
-                print("Unable to move. I might be blocked or there might be an obstacle.")
+                self.log_state("Unable to move. I might be blocked or there might be an obstacle.")
                 feedback = "Je n'ai pas pu atteindre l'objet. Il semble qu'il y ait un obstacle ou que je suis bloqué."
                 new_state = StateCode.IDLE
             case ExecutionCode.UNREACHABLE_OBJECT:
-                print(
+                self.log_state(
                     "Unreachable object. The object might be out of my reach or might have been moved since the vision stage.")
                 feedback = "Je n'ai pas pu atteindre l'objet. Il semble que l'objet soit hors de ma portée ou qu'il ait été déplacé depuis la vision."
                 new_state = StateCode.VISION
             case ExecutionCode.OBJECT_DROPPED:
-                print("Object dropped. I might have dropped the object during the execution.")
+                self.log_state("Object dropped. I might have dropped the object during the execution.")
                 feedback = "J'ai laissé tomber l'objet pendant l'exécution. Je suis désolé. Voulez-vous que je réessaye ?"
                 new_state = StateCode.LISTENING
             case _:
-                print("Unknown execution code. Transitioning to exit state for safety.")
+                self.log_state("Unknown execution code. Transitioning to exit state for safety.")
                 new_state = StateCode.EXIT
 
         if feedback:
-            self.bira_manager.add_feedback(feedback)
-            self.bira_manager.controller.speak(feedback)
+            self.emit_feedback(feedback, source="state_log")
         self.bira_manager.change_state(new_state)

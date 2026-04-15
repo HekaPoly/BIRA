@@ -345,12 +345,15 @@ class SLM_Manager:
                 ],
                 max_tokens=100,
             )
+            feedback_source = "slm_feedback"
         except Exception as exc:
             self._debug_log(f"mode response fallback due to error: {exc}")
             text = ""
+            feedback_source = "fallback_feedback"
 
         if not text:
             text = self._fallback_mode_response(mode=mode, transcription=transcription, detections=detections)
+            feedback_source = "fallback_feedback"
 
         if mode == "stop":
             self.reset_conversation()
@@ -362,6 +365,7 @@ class SLM_Manager:
             "selected_label": None,
             "selected_label_id": None,
             "selected_candidate_index": None,
+            "feedback_source": feedback_source,
         }
 
     def run_inference(self) -> dict:
@@ -378,6 +382,7 @@ class SLM_Manager:
                 "selected_label": None,
                 "selected_label_id": None,
                 "selected_candidate_index": None,
+                "feedback_source": "fallback_feedback",
             }
 
         detections = detections or []
@@ -464,6 +469,7 @@ class SLM_Manager:
                     transcription=transcription,
                     candidates=active_candidates,
                 )
+                parsed["feedback_source"] = "slm_feedback"
 
                 # Reset on stop
                 if parsed["mode"] == "stop":
@@ -485,6 +491,7 @@ class SLM_Manager:
                     "selected_label": None,
                     "selected_label_id": None,
                     "selected_candidate_index": None,
+                    "feedback_source": "fallback_feedback",
                 }
 
         except json.JSONDecodeError as err:
@@ -495,6 +502,7 @@ class SLM_Manager:
                 "selected_label": None,
                 "selected_label_id": None,
                 "selected_candidate_index": None,
+                "feedback_source": "fallback_feedback",
             }
         except Exception as err:
             self._debug_log(f"inference error: {err}")
