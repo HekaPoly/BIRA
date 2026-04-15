@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ENGINE_DIR = Path(__file__).resolve().parent / "tensorrt_models" / "engines"
+MODULE_DIR = Path(__file__).resolve().parent
+DEFAULT_ENGINE_DIR = MODULE_DIR / "tensorrt_models" / "engines"
 
 
 class TensorRTInferenceEngine:
@@ -28,25 +29,78 @@ class TensorRTInferenceEngine:
         self.last_error: Optional[str] = None
         self.runner_command: List[str] = []
 
-    def _load_config(self) -> Dict[str, Any]:
+    def _candidate_config_paths(self) -> List[Path]:
         config_override = os.getenv("TENSORRT_CONFIG_PATH")
-        config_path = Path(config_override) if config_override else self.engine_dir / "config.json"
-        self.config_path = config_path
-        if not config_path.exists():
+        if config_override:
+            return [Path(config_override).expanduser()]
+
+        # Accept both runtime config.json and template tensorrt_config.json.
+        candidates = [
+            self.engine_dir / "config.json",
+            self.engine_dir / "tensorrt_config.json",
+            self.engine_dir / "engines" / "config.json",
+            self.engine_dir / "tensorrt_models" / "engines" / "config.json",
+            MODULE_DIR / "tensorrt_config.json",
+        ]
+        deduped: List[Path] = []
+        seen = set()
+        for path in candidates:
+            normalized = str(path)
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            deduped.append(path)
+        return deduped
+
+    @staticmethod
+    def _resolve_engine_dir_from_config(config: Dict[str, Any], config_path: Path) -> Optional[Path]:
+        paths_cfg = config.get("paths")
+        if not isinstance(paths_cfg, dict):
+            return None
+
+        configured = paths_cfg.get("engine_dir")
+        if not isinstance(configured, str) or not configured.strip():
+            return None
+
+        candidate = Path(configured).expanduser()
+        if not candidate.is_absolute():
+            candidate = (config_path.parent / candidate).resolve()
+        return candidate
+
+    def _load_config(self) -> Dict[str, Any]:
+        candidates = self._candidate_config_paths()
+        config_path = next((path for path in candidates if path.exists()), None)
+        if config_path is None:
+            self.config_path = candidates[0] if candidates else None
+            searched = ", ".join(str(path) for path in candidates)
             if os.getenv("TENSORRT_RUNNER_COMMAND"):
                 logger.info(
-                    "TensorRT config not found at %s; using TENSORRT_RUNNER_COMMAND from environment.",
-                    config_path,
+                    "TensorRT config not found. Tried: %s. Using TENSORRT_RUNNER_COMMAND from environment.",
+                    searched,
                 )
             else:
                 logger.warning(
-                    "TensorRT config not found at %s. Create it or set TENSORRT_RUNNER_COMMAND.",
-                    config_path,
+                    "TensorRT config not found. Tried: %s. Create config.json or set TENSORRT_RUNNER_COMMAND.",
+                    searched,
                 )
             return {}
 
-        with config_path.open("r", encoding="utf-8") as stream:
-            return json.load(stream)
+        self.config_path = config_path
+        if config_path.name == "tensorrt_config.json":
+            logger.info("Using TensorRT template config at %s", config_path)
+
+        try:
+            with config_path.open("r", encoding="utf-8") as stream:
+                config = json.load(stream)
+        except json.JSONDecodeError as exc:
+            logger.error("TensorRT config is not valid JSON at %s (%s)", config_path, exc)
+            return {}
+
+        resolved_engine_dir = self._resolve_engine_dir_from_config(config, config_path)
+        if resolved_engine_dir:
+            self.engine_dir = resolved_engine_dir
+
+        return config
 
     def _resolve_runner_command(self) -> List[str]:
         runtime_cfg = self.config.get("runtime", {})
@@ -60,7 +114,7 @@ class TensorRTInferenceEngine:
 
     def load_engine(self) -> bool:
         """Validate the TensorRT assets and the runner command."""
-        if not self.engine_dir.exists():
+        if not self.engine_dir.exists() or not self.engine_dir.is_dir():
             self.last_error = (
                 f"TensorRT engine directory not found: {self.engine_dir}. "
                 "Set TENSORRT_ENGINE_DIR or provide tensorrt_engine_dir."
