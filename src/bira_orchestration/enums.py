@@ -42,6 +42,7 @@ class PlanificationCode(IntEnum):
      5: idle (user want to stop the process, or no input received)
     6: repeat requested because the input was not understood
     7: more details needed to disambiguate the target object
+    8: reformulate request because no candidate matches the requested object
     """
 
     ERROR = -1
@@ -53,6 +54,7 @@ class PlanificationCode(IntEnum):
     IDLE = 5
     REPEAT_REQUEST = 6
     NEED_MORE_INFO = 7
+    REFORMULATE_REQUEST = 8
 
 
 class ExecutionCode(IntEnum):

@@ -85,6 +85,24 @@ class PlanningState(State):
             context.planification_code = PlanificationCode.UNDETECTED_OBJECT
             return
 
+        if mode == "reformulate":
+            # SLM found no matching candidate for requested object.
+            self.bira_manager.add_feedback(feedback)
+            context.planification_code = PlanificationCode.REFORMULATE_REQUEST
+            return
+
+        if mode == "unclear_action":
+            # SLM understood speech but not the requested action intent.
+            self.bira_manager.add_feedback(feedback)
+            context.planification_code = PlanificationCode.UNCLEAR_COMMAND
+            return
+
+        if mode == "inappropriate":
+            # SLM marked the request as out-of-scope.
+            self.bira_manager.add_feedback(feedback)
+            context.planification_code = PlanificationCode.INAPPROPRIATE_REQUEST
+            return
+
         if mode == "repeat":
             # SLM couldn't understand input or action
             self.bira_manager.add_feedback(feedback)
@@ -134,6 +152,10 @@ class PlanningState(State):
                 new_state = StateCode.LISTENING
             case PlanificationCode.NEED_MORE_INFO:
                 print("More information needed to identify the object.")
+                feedback = self.bira_manager.get_last_feedback()
+                new_state = StateCode.LISTENING
+            case PlanificationCode.REFORMULATE_REQUEST:
+                print("Requested object not found. User needs to reformulate.")
                 feedback = self.bira_manager.get_last_feedback()
                 new_state = StateCode.LISTENING
             case PlanificationCode.IDLE:

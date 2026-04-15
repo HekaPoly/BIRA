@@ -113,7 +113,15 @@ class SLM_Manager:
                 "response": {"type": "string"},
                 "mode": {
                     "type": "string",
-                    "enum": ["confirmation", "clarification", "repeat", "stop"],
+                    "enum": [
+                        "confirmation",
+                        "clarification",
+                        "reformulate",
+                        "repeat",
+                        "unclear_action",
+                        "inappropriate",
+                        "stop",
+                    ],
                 },
                 "request_scope": {
                     "type": "string",
@@ -304,7 +312,15 @@ class SLM_Manager:
 
         # Validate and normalize fields
         mode = str(parsed.get("mode", "clarification")).strip().lower()
-        if mode not in {"confirmation", "clarification", "repeat", "stop"}:
+        if mode not in {
+            "confirmation",
+            "clarification",
+            "reformulate",
+            "repeat",
+            "unclear_action",
+            "inappropriate",
+            "stop",
+        }:
             mode = "clarification"
 
         request_scope = str(parsed.get("request_scope", "in_scope")).strip().lower()
@@ -457,6 +473,11 @@ class SLM_Manager:
                 parsed["selected_candidate_index"] = only.get("index")
                 parsed["selected_label"] = only.get("label")
                 parsed["selected_label_id"] = only.get("label_id")
+            else:
+                parsed["mode"] = "reformulate"
+                parsed["response"] = (
+                    "I don't see that object. Could you describe it differently?"
+                )
 
         if parsed.get("mode") == "confirmation" and parsed.get("selected_candidate_index") is None:
             if requested_label:
@@ -482,7 +503,7 @@ class SLM_Manager:
             model=self.model_name,
             messages=self.history,
             stream=False,
-            think=False,
+            think=True,
             format=self.response_schema,
             options={"temperature": self.temperature, "num_predict": self.num_predict},
         )
@@ -524,7 +545,7 @@ class SLM_Manager:
         if not detections:
             return {
                 "response": "I don't see any relevant object. Could you clarify?",
-                "mode": "clarification",
+                "mode": "reformulate",
                 "request_scope": "in_scope",
                 "selected_label": None,
                 "selected_label_id": None,
@@ -616,19 +637,6 @@ class SLM_Manager:
                     transcription=transcription,
                     candidates=active_candidates,
                 )
-
-                # Guardrail: prevent repeat loops if we have valid transcription and detections
-                if (
-                    parsed["mode"] == "repeat"
-                    and transcription.strip()
-                    and detections
-                ):
-                    parsed["mode"] = "clarification"
-                    if "repeat" in str(parsed.get("response", "")).lower():
-                        parsed["response"] = (
-                            "I understood your request, but need more details. "
-                            "Which object do you mean?"
-                        )
 
                 # Reset on stop
                 if parsed["mode"] == "stop":
