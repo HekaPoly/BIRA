@@ -13,7 +13,7 @@ class ExecutingState(State):
 
     def _handle(self):
         self.bira_manager.controller.send_mechanical_command(self.bira_manager.get_data().object_selected)
-        self.bira_manager.get_data().execution_code = ExecutionCode.SUCCESS
+        self.bira_manager.get_data().set_execution_code(ExecutionCode.SUCCESS)
 
     def _decide_next_state(self):
         execution_code = self.bira_manager.get_data().execution_code

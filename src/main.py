@@ -1,8 +1,24 @@
 import argparse
 import os
+import signal
+import sys
 from pathlib import Path
 
 from bira_orchestration.manager import BiraManager
+
+
+def setup_signal_handlers(bira_manager):
+    """Set up graceful shutdown on CTRL-C (SIGINT)."""
+    def signal_handler(signum, frame):
+        print("\n\n[Main] CTRL-C received. Shutting down gracefully...")
+        try:
+            bira_manager.controller.destroy()
+            print("[Main] All components destroyed. Exiting.")
+        except Exception as e:
+            print(f"[Main] Error during shutdown: {e}")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
 
 
 def main():
@@ -57,6 +73,7 @@ def main():
         slm_stream=opt.slm_stream,
         api_key=opt.api_key,
     )
+    setup_signal_handlers(bira_manager)
     bira_manager.preload()
     bira_manager.run()
 

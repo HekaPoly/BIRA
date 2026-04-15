@@ -13,7 +13,7 @@ class ListeningState(State):
     def _handle(self):
         transcription = self.bira_manager.controller.listen()
         self.bira_manager.add_user_input(transcription)
-        self.bira_manager.get_data().listening_code = ListeningCode.SUCCESS
+        self.bira_manager.get_data().set_listening_code(ListeningCode.SUCCESS)
 
     def _decide_next_state(self):
         listening_code = self.bira_manager.get_data().listening_code

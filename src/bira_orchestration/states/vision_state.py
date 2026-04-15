@@ -15,7 +15,7 @@ class VisionState(State):
         context = self.bira_manager.get_data()
         context.objects_detected = sl_object.object_list
         context.detection_labels = detection_labels
-        context.vision_code = VisionCode.SUCCESS
+        context.set_vision_code(VisionCode.SUCCESS)
 
         for obj in context.objects_detected:
             obj_id = obj.id

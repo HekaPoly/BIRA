@@ -23,6 +23,32 @@ class BiraContext:
     route_mode_hint: str | None = None
     feedback_source: str = "state_log"
 
+    def _log_code_change(self, code_type: str, code: int) -> None:
+        """Helper to log code changes with consistent formatting."""
+        code_name = code.name if hasattr(code, 'name') else str(code)
+        code_value = code.value if hasattr(code, 'value') else code
+        print(f"[Code] {code_type}: {code_name} ({code_value})")
+
+    def set_listening_code(self, code: ListeningCode) -> None:
+        """Set listening code and log the change."""
+        self._log_code_change("ListeningCode", code)
+        self.listening_code = code
+
+    def set_vision_code(self, code: VisionCode) -> None:
+        """Set vision code and log the change."""
+        self._log_code_change("VisionCode", code)
+        self.vision_code = code
+
+    def set_planification_code(self, code: PlanificationCode) -> None:
+        """Set planification code and log the change."""
+        self._log_code_change("PlanificationCode", code)
+        self.planification_code = code
+
+    def set_execution_code(self, code: ExecutionCode) -> None:
+        """Set execution code and log the change."""
+        self._log_code_change("ExecutionCode", code)
+        self.execution_code = code
+
     def reset_all(self) -> None:
         self.objects_detected.clear()
         self.detection_labels.clear()

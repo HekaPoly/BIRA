@@ -103,7 +103,7 @@ class PlanningState(State):
             context.clear_vision_context()
             self.bira_manager.controller.slm_manager.reset_task_context()
             self.bira_manager.add_feedback(feedback)
-            context.planification_code = PlanificationCode.IDLE
+            context.set_planification_code(PlanificationCode.IDLE)
             return
 
         if mode == "confirmation":
@@ -112,53 +112,53 @@ class PlanningState(State):
                 selected_candidate_index = response.get("selected_candidate_index")
                 context.object_selected = matched_objects[0]
                 self.bira_manager.add_feedback(feedback)
-                context.planification_code = PlanificationCode.SUCCESS
+                context.set_planification_code(PlanificationCode.SUCCESS)
                 return
             # Fallback (shouldn't happen if SLM is correct)
             self.bira_manager.add_feedback("Error: object not found despite confirmation.")
             context.feedback_source = "fallback_feedback"
-            context.planification_code = PlanificationCode.UNDETECTED_OBJECT
+            context.set_planification_code(PlanificationCode.UNDETECTED_OBJECT)
             return
 
         if mode == "reformulate":
             # SLM found no matching candidate for requested object.
             self.bira_manager.add_feedback(feedback)
-            context.planification_code = PlanificationCode.REFORMULATE_REQUEST
+            context.set_planification_code(PlanificationCode.REFORMULATE_REQUEST)
             return
 
         if mode == "unclear_action":
             # SLM understood speech but not the requested action intent.
             self.bira_manager.add_feedback(feedback)
-            context.planification_code = PlanificationCode.UNCLEAR_COMMAND
+            context.set_planification_code(PlanificationCode.UNCLEAR_COMMAND)
             return
 
         if mode == "inappropriate":
             # SLM flagged moderated illicit content.
             self.bira_manager.add_feedback(feedback)
-            context.planification_code = PlanificationCode.INAPPROPRIATE_REQUEST
+            context.set_planification_code(PlanificationCode.INAPPROPRIATE_REQUEST)
             return
 
         if mode == "out_of_scope":
             # SLM identified an action outside robotic arm capabilities.
             self.bira_manager.add_feedback(feedback)
-            context.planification_code = PlanificationCode.OUT_OF_SCOPE_REQUEST
+            context.set_planification_code(PlanificationCode.OUT_OF_SCOPE_REQUEST)
             return
 
         if mode == "conversing":
             # SLM is having a regular conversation, with no execution requested.
             self.bira_manager.add_feedback(feedback)
-            context.planification_code = PlanificationCode.CONVERSING
+            context.set_planification_code(PlanificationCode.CONVERSING)
             return
 
         if mode == "repeat":
             # SLM couldn't understand input or action
             self.bira_manager.add_feedback(feedback)
-            context.planification_code = PlanificationCode.REPEAT_REQUEST
+            context.set_planification_code(PlanificationCode.REPEAT_REQUEST)
             return
 
         # mode == "clarification" or any other mode: SLM needs more information
         self.bira_manager.add_feedback(feedback)
-        context.planification_code = PlanificationCode.NEED_MORE_INFO
+        context.set_planification_code(PlanificationCode.NEED_MORE_INFO)
 
     def _decide_next_state(self):
         planification_code = self.bira_manager.get_data().planification_code
