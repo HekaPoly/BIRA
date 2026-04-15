@@ -67,11 +67,15 @@ class SLM_Formatter:
         candidates_json = json.dumps(candidates or [], ensure_ascii=False)
         schema_json = json.dumps(self.response_schema, ensure_ascii=False)
         pending_label_text = pending_label or "null"
+        vision_status = "available" if (detections or candidates) else "unavailable"
         return (
             f"Transcription: {transcription}\\n"
+            f"Vision status for this turn: {vision_status}\\n"
             f"Detected objects: {detections}\\n"
             f"Pending label from prior clarification (if any): {pending_label_text}\\n"
             f"Candidates (format: index, label, label_id, position [x,y,z]): {candidates_json}\\n"
+            "Important: if vision status is unavailable, do not claim to see objects. "
+            "Use conversing/out_of_scope/repeat/unclear_action based on transcription intent.\\n"
             "Important: when transcription references prior clarification (e.g., 'left one', 'closest one'), "
             "resolve using candidates positions and return confirmation with selected_candidate_index.\\n"
             "Important: if pending label exists and user says pronouns like 'left one', resolve only within that label group.\\n"

@@ -87,6 +87,28 @@ class SLM_Manager:
             ],
             "additionalProperties": False,
         }
+        self.route_schema = {
+            "type": "object",
+            "properties": {
+                "needs_vision": {"type": "boolean"},
+                "mode": {
+                    "type": "string",
+                    "enum": [
+                        "confirmation",
+                        "clarification",
+                        "reformulate",
+                        "repeat",
+                        "unclear_action",
+                        "conversing",
+                        "out_of_scope",
+                        "inappropriate",
+                        "stop",
+                    ],
+                },
+            },
+            "required": ["needs_vision", "mode"],
+            "additionalProperties": False,
+        }
 
         if mode == "cloud":
             if not api_key:
@@ -205,10 +227,56 @@ class SLM_Manager:
         self.detection_candidates = candidates if candidates else None
 
     def route_request(self, transcription: str) -> dict:
-        """Decide whether vision is needed before planning."""
+        """Decide whether vision is needed before planning using SLM router."""
         text = str(transcription or "").strip().lower()
         if not text:
             return {"needs_vision": False, "mode": "repeat"}
+
+        try:
+            thinking, content = self.chat_controller.chat_non_stream_json(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a routing classifier for a robotic arm assistant. "
+                            "Classify whether the user request needs vision BEFORE planning. "
+                            "Return strict JSON only with fields: needs_vision (boolean), mode (string). "
+                            "needs_vision=true only when user asks for object selection/grasping that requires seeing objects. "
+                            "needs_vision=false for conversation, stop/cancel, out-of-scope actions, or unclear requests."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Transcription: {text}",
+                    },
+                ],
+                schema=self.route_schema,
+            )
+            if self.debug and thinking.strip():
+                print("[SLM_DEBUG] Router thinking:")
+                print(thinking)
+            if self.debug and content.strip():
+                print("[SLM_DEBUG] Router answer:")
+                print(content)
+
+            parsed = self.formatter.parse_response(content)
+            mode = parsed.get("mode", "clarification")
+
+            # Parse needs_vision from the router's JSON response
+            try:
+                route_obj = json.loads(content)
+                needs_vision = bool(route_obj.get("needs_vision", True))
+            except Exception:
+                # Fallback: use mode to infer vision need
+                needs_vision = mode in {"confirmation", "clarification", "reformulate"}
+
+            return {"needs_vision": needs_vision, "mode": mode}
+        except Exception as exc:
+            self._debug_log(f"router_error={exc}; falling back to heuristic routing")
+            return self._route_request_heuristic(text)
+
+    def _route_request_heuristic(self, text: str) -> dict:
+        """Fallback routing when router call fails."""
 
         stop_markers = {
             "stop",

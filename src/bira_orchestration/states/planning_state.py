@@ -57,6 +57,8 @@ class PlanningState(State):
         route = self.bira_manager.controller.route_request(context)
         needs_vision = route.get("needs_vision", True)
         mode_hint = route.get("mode")
+        context.skip_vision_for_current_input = not needs_vision
+        context.route_mode_hint = mode_hint
 
         # Run vision inline if needed and not already executed.
         if needs_vision and not context.objects_detected:
@@ -85,6 +87,9 @@ class PlanningState(State):
                 context.detection_labels = []
         elif not needs_vision:
             self.log_state(f"Planning: No vision needed for '{user_input[:60]}...' (mode_hint={mode_hint})")
+            # Prevent stale detections from previous turns from leaking into this turn.
+            context.objects_detected = []
+            context.detection_labels = []
 
         # Now prompt SLM with available vision data (or empty if not needed).
         response = self.bira_manager.controller.prompt_slm(context)
