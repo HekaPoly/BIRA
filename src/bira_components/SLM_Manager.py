@@ -86,6 +86,19 @@ class SLM_Manager:
     def set_transcription(self, transcription: str) -> None:
         self.transcription = transcription
 
+    @staticmethod
+    def _extract_position_xyz(position) -> Optional[list[float]]:
+        """Normalize a position container to [x, y, z] or None."""
+        if position is None:
+            return None
+
+        try:
+            if len(position) < 3:
+                return None
+            return [float(position[0]), float(position[1]), float(position[2])]
+        except Exception:
+            return None
+
     def set_detections(
         self,
         detection_labels: Optional[list[int]] = None,
@@ -95,7 +108,7 @@ class SLM_Manager:
         resolved: list[str] = []
         candidates: list[dict] = []
 
-        if detected_objects and computer_vision:
+        if detected_objects is not None and computer_vision is not None:
             for index, obj in enumerate(detected_objects):
                 raw = getattr(obj, "raw_label", None)
                 if raw is None:
@@ -105,11 +118,7 @@ class SLM_Manager:
                 resolved.append(label_name)
 
                 position = getattr(obj, "position", None)
-                pos_value = (
-                    [float(position[0]), float(position[1]), float(position[2])]
-                    if position and len(position) >= 3
-                    else None
-                )
+                pos_value = self._extract_position_xyz(position)
 
                 candidates.append(
                     {
@@ -119,7 +128,7 @@ class SLM_Manager:
                         "position": pos_value,
                     }
                 )
-        elif detection_labels and computer_vision:
+        elif detection_labels is not None and computer_vision is not None:
             for index, label_id in enumerate(detection_labels):
                 label_name = computer_vision.get_label_name(label_id)
                 resolved.append(label_name)
@@ -131,7 +140,7 @@ class SLM_Manager:
                         "position": None,
                     }
                 )
-        elif detection_labels:
+        elif detection_labels is not None:
             for index, label_id in enumerate(detection_labels):
                 label_name = str(label_id)
                 resolved.append(label_name)
