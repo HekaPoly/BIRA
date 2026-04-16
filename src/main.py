@@ -59,19 +59,12 @@ def main():
         default=True,
         help='Enable streamed SLM output in the terminal.',
     )
-    parser.add_argument(
-        '--tensorrt-runner-command',
-        default=None,
-        help='Local command used to run the TensorRT chat backend (overrides TENSORRT_RUNNER_COMMAND).',
-    )
 
     opt = parser.parse_args()
     if opt.slm_debug:
         os.environ['SLM_DEBUG'] = '1'
     if not opt.slm_stream:
         os.environ['SLM_STREAM'] = '0'
-    if opt.tensorrt_runner_command:
-        os.environ['TENSORRT_RUNNER_COMMAND'] = opt.tensorrt_runner_command
 
     bira_manager = BiraManager(
         mock_mode=opt.mock,
