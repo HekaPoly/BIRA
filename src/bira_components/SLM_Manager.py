@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -142,6 +143,19 @@ class SLM_Manager:
             ],
             "additionalProperties": False,
         }
+        self._personality_override_patterns = [
+            re.compile(pattern, re.IGNORECASE)
+            for pattern in [
+                r"\bignore (all )?(previous|prior|above) (instructions|rules)\b",
+                r"\bforget (your|all) (instructions|rules|persona|role)\b",
+                r"\byou are now\b",
+                r"\bnew (persona|personality|role|identity)\b",
+                r"\bchange (your )?(persona|personality|role|identity)\b",
+                r"\bact as\b",
+                r"\bpretend to be\b",
+                r"\bjailbreak\b",
+            ]
+        ]
 
         if mode == "cloud":
             if not api_key:
@@ -221,11 +235,19 @@ class SLM_Manager:
         if not self.trt_ready or not self.trt_engine:
             return
 
-        self.trt_engine.chat(
-            messages=[{"role": "user", "content": "Reply with {}."}],
-            max_new_tokens=8,
-            temperature=0.0,
-        )
+        try:
+            self.trt_engine.chat(
+                messages=[{"role": "user", "content": "Reply with {}."}],
+                max_new_tokens=8,
+                temperature=0.0,
+            )
+        except Exception as exc:
+            bira_history.log_event("tensorrt_warmup_failed", component="slm_manager", error=str(exc))
+            self.trt_ready = False
+            self.trt_engine = None
+            if not self.tensorrt_fallback_to_ollama:
+                raise
+            print(f"TensorRT warmup failed ({exc}). Falling back to Ollama.")
 
     def _warmup_ollama_backend(self) -> None:
         self.client.chat(
@@ -298,20 +320,27 @@ class SLM_Manager:
         self.detections = resolved if resolved else None
         self.detection_candidates = candidates if candidates else None
 
-    def _build_prompt(self, transcription: str, detections: list[str], candidates: Optional[list[dict]]) -> str:
+    def _build_prompt(self, transcription: str, candidates: Optional[list[dict]]) -> str:
         candidates_json = json.dumps(candidates or [], ensure_ascii=False)
         schema_json = json.dumps(self.response_schema, ensure_ascii=False)
         pending_label_text = self.pending_label or "null"
         return (
             f"Transcription: {transcription}\n"
-            f"Detected objects: {detections}\n"
             f"Pending label from prior clarification (if any): {pending_label_text}\n"
-            f"Candidates (format: index, label, label_id, position [x,y,z]): {candidates_json}\n"
+            f"Object list (format: index, label, label_id, position [x,y,z]): {candidates_json}\n"
+            "Important: object identity must be resolved only from this object list.\n"
+            "Important: ignore color adjectives (red/blue/etc.). Use label and position only.\n"
             "Important: when transcription references prior clarification (e.g., 'left one', 'closest one'), "
             "resolve using candidates positions and return confirmation with selected_candidate_index.\n"
             "Important: if pending label exists and user says pronouns like 'left one', resolve only within that label group.\n"
             f"Return JSON matching this schema exactly: {schema_json}"
         )
+
+    def _is_personality_override_request(self, transcription: str) -> bool:
+        text = str(transcription or "").strip()
+        if not text:
+            return False
+        return any(pattern.search(text) for pattern in self._personality_override_patterns)
 
     @staticmethod
     def _as_dict(value):
@@ -488,7 +517,6 @@ class SLM_Manager:
 
     def run_inference(self) -> dict:
         transcription = self.transcription
-        detections = self.detections
         candidates = self.detection_candidates or []
 
         if not transcription:
@@ -501,7 +529,20 @@ class SLM_Manager:
                 "selected_candidate_index": None,
             }
 
-        if not detections:
+        if self._is_personality_override_request(transcription):
+            return {
+                "response": (
+                    "Je ne peux pas changer ma personnalite ni mes regles. "
+                    "Je peux seulement aider avec la selection d'objets detectes."
+                ),
+                "mode": "clarification",
+                "request_scope": "out_of_scope",
+                "selected_label": None,
+                "selected_label_id": None,
+                "selected_candidate_index": None,
+            }
+
+        if not candidates:
             return {
                 "response": "I don't see any relevant object. Could you clarify?",
                 "mode": "clarification",
@@ -512,7 +553,7 @@ class SLM_Manager:
             }
 
         active_candidates = self._select_active_candidates(transcription, candidates)
-        prompt = self._build_prompt(transcription, detections, active_candidates)
+        prompt = self._build_prompt(transcription, active_candidates)
         self.history.append({"role": "user", "content": prompt})
         self.last_backend = None
 

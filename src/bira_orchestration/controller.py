@@ -33,12 +33,45 @@ class BiraController:
             ("language model", self.slm_manager.preload),
         ]
 
+        preload_summary = []
         for label, preload in preload_steps:
             print(f"Preloading {label}...")
             try:
                 preload()
+                preload_summary.append({"component": label, "status": "ready"})
+                bira_history.log_event(
+                    "component_preload_result",
+                    component="controller",
+                    target=label,
+                    status="ready",
+                )
             except Exception as exc:
                 print(f"Unable to preload {label}: {exc}")
+                preload_summary.append(
+                    {
+                        "component": label,
+                        "status": "failed",
+                        "error": str(exc),
+                    }
+                )
+                bira_history.log_event(
+                    "component_preload_result",
+                    component="controller",
+                    target=label,
+                    status="failed",
+                    error=str(exc),
+                )
+
+        ready_count = sum(1 for item in preload_summary if item.get("status") == "ready")
+        total_count = len(preload_summary)
+        print(f"Component preload summary: {ready_count}/{total_count} ready")
+        bira_history.log_event(
+            "component_preload_summary",
+            component="controller",
+            ready_count=ready_count,
+            total_count=total_count,
+            results=preload_summary,
+        )
 
     def sleep_mode(self):
         self.micro.wait_for_volume()
@@ -90,6 +123,14 @@ class BiraController:
             user_input = None
         detected_objects = context.objects_detected if context.objects_detected else None
 
+        bira_history.log_event(
+            "planning_request_started",
+            component="controller",
+            user_input=user_input or "",
+            object_count=len(detected_objects or []),
+            detection_labels=context.detection_labels or [],
+        )
+
         self.slm_manager.set_transcription(user_input or "")
         self.slm_manager.set_detections(
             detection_labels=context.detection_labels,
@@ -97,7 +138,29 @@ class BiraController:
             computer_vision=self.computer_vision,
         )
 
-        return self.slm_manager.run_inference()
+        response = self.slm_manager.run_inference()
+        bira_history.log_event(
+            "planning_request_completed",
+            component="controller",
+            backend=self.slm_manager.last_backend,
+            mode=response.get("mode"),
+            request_scope=response.get("request_scope"),
+            selected_candidate_index=response.get("selected_candidate_index"),
+            selected_label=response.get("selected_label"),
+            selected_label_id=response.get("selected_label_id"),
+        )
+        bira_history.log_conversation(
+            "assistant_planning",
+            response.get("response", ""),
+            source="slm_manager",
+            backend=self.slm_manager.last_backend,
+            mode=response.get("mode"),
+            request_scope=response.get("request_scope"),
+            selected_candidate_index=response.get("selected_candidate_index"),
+            selected_label=response.get("selected_label"),
+            selected_label_id=response.get("selected_label_id"),
+        )
+        return response
     
     def destroy(self):
         components = [

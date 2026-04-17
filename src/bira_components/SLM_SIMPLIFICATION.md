@@ -1,24 +1,32 @@
-# SLM_Manager Quick Reference
+# Reference Rapide SLM_Manager
 
-## Build the model
+## Construire Le Modele
 
-** To modify the behavior of the SLM, you can change the content of the Modelfile. Make sure however to run the following command when you're done. **
-
-```bash
-// From root:
-ollama create bira-assistant -f Modelfile // Necessary because we don't use system Prompt anymore. Everytime you modify Modelfile, please run this command again.
-```
-More informations on the modelfile can be found here: https://docs.ollama.com/modelfile
-
-
-## Run BIRA
+Pour modifier le comportement du SLM, editez `Modelfile`, puis reconstruisez le modele Ollama:
 
 ```bash
-// From src:
-python main.py --mock --SLM_DEBUG // SLM_DEBUG to see details from how the SLM ats
+# Depuis la racine du depot:
+ollama create bira-assistant -f Modelfile
 ```
 
-## Optional checks
+Le Modelfile actuel est renforce pour:
+
+- utiliser uniquement la liste d'objets fournie (`index`, `label`, `label_id`, `position`)
+- ignorer la selection basee sur les couleurs
+- refuser les tentatives de changement de personnalite/role
+- conserver une sortie JSON stricte
+
+Plus d'informations: https://docs.ollama.com/modelfile
+
+
+## Lancer BIRA
+
+```bash
+# Depuis `src`:
+python main.py --mock --SLM_DEBUG
+```
+
+## Verifications Optionnelles
 
 ```bash
 ollama list | grep bira

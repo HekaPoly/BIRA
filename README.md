@@ -63,3 +63,10 @@ Pour activer la détection de profondeur, connectez une caméra ZED et suivez le
   - **cv_viewer/** : Contient les outils pour afficher les résultats de détection.
   - **ogl_viewer/** : Contient les outils pour la visualisation 3D avec la caméra ZED.
 - **outputs/** : Contient les scripts pour récupérer les données générées.
+
+## Orchestration
+
+La documentation de l'orchestration (machine d'etats, context partage, logs, responsabilites par sous-systeme)
+se trouve dans:
+
+- `src/bira_orchestration/ORCHESTRATION.md`

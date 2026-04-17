@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import shlex
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -156,11 +157,63 @@ class TensorRTInferenceEngine:
         runtime_cfg = self.config.get("runtime", {})
         configured = os.getenv("TENSORRT_RUNNER_COMMAND") or runtime_cfg.get("runner_command")
 
+        if self._is_placeholder_runner_command(configured):
+            return []
+
         if isinstance(configured, list):
             return [str(part) for part in configured]
         if isinstance(configured, str) and configured.strip():
             return shlex.split(configured)
         return []
+
+    @staticmethod
+    def _is_placeholder_runner_command(configured: Any) -> bool:
+        if configured is None:
+            return False
+
+        if isinstance(configured, list):
+            text = " ".join(str(part) for part in configured)
+        else:
+            text = str(configured)
+
+        normalized = " ".join(text.strip().lower().split())
+        if not normalized:
+            return True
+        placeholder_markers = [
+            "set a local tensorrt runner command",
+            "configure runtime.runner_command",
+            "set runtime.runner_command",
+        ]
+        return any(marker in normalized for marker in placeholder_markers)
+
+    def _runner_executable_exists(self) -> bool:
+        if not self.runner_command:
+            self.last_error = "No TensorRT runner command configured."
+            return False
+
+        executable = self.runner_command[0]
+        executable_path = Path(executable).expanduser()
+
+        if executable_path.is_file():
+            return True
+
+        if any(separator in executable for separator in ("/", "\\")):
+            if executable_path.exists():
+                return True
+            self.last_error = (
+                "TensorRT runner executable was not found. "
+                f"Missing path: {executable_path}"
+            )
+            return False
+
+        if shutil.which(executable):
+            return True
+
+        self.last_error = (
+            "TensorRT runner executable is not available in PATH. "
+            f"Missing command: {executable}"
+        )
+        return False
 
     def load_engine(self) -> bool:
         """Validate the TensorRT assets and the runner command."""
@@ -192,6 +245,9 @@ class TensorRTInferenceEngine:
                 "No TensorRT runner command configured. "
                 "Set runtime.runner_command in config.json or TENSORRT_RUNNER_COMMAND."
             )
+            logger.warning(self.last_error)
+            return False
+        if not self._runner_executable_exists():
             logger.warning(self.last_error)
             return False
 

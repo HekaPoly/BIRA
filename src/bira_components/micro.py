@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 import sounddevice as sd
 import numpy as np
@@ -7,24 +8,37 @@ import wave
 from bira_components import history as bira_history
 
 RECORDING_FILE_PATH = 'recording.wav'
+DEFAULT_RECORD_SECONDS = 5.0
 
 class Micro:
-    def __init__(self, frequency=44100, device=None):
+    def __init__(
+        self,
+        frequency=44100,
+        device=None,
+        default_record_seconds: float = DEFAULT_RECORD_SECONDS,
+        max_live_buffer_seconds: float = DEFAULT_RECORD_SECONDS,
+    ):
         """
         Initialize the Micro object.
 
         Parameters:
             frequency (int): Sampling rate in Hz (default: 44100).
             device (str or None): Name or ID of the audio input device.
+            default_record_seconds (float): Default recording duration in seconds.
+            max_live_buffer_seconds (float): Rolling window used during wake-word style capture.
 
         Returns:
             None
         """
         self.frequency = frequency
         self.device = device
+        self.default_record_seconds = float(default_record_seconds)
+        self.max_live_buffer_seconds = float(max_live_buffer_seconds)
         self.is_recording = False
         self.audio_data = None
         self.stream = None
+        self._active_max_buffer_frames: Optional[int] = None
+        self._buffered_frames = 0
 
     def get_volume(self):
         """
@@ -52,8 +66,13 @@ class Micro:
         Returns:
             None
         """
-        self._start_recording()
-        bira_history.log_event("recording_wait_started", component="micro", threshold=threshold)
+        self._start_recording(max_buffer_seconds=self.max_live_buffer_seconds)
+        bira_history.log_event(
+            "recording_wait_started",
+            component="micro",
+            threshold=threshold,
+            max_live_buffer_seconds=self.max_live_buffer_seconds,
+        )
 
         while True:
             sd.sleep(100)
@@ -74,21 +93,26 @@ class Micro:
                     self._stop_recording()
                     break
 
-    def record(self):
+    def record(self, duration_seconds: Optional[float] = None):
+        duration = float(duration_seconds) if duration_seconds is not None else self.default_record_seconds
         print('start transcription_request')
         bira_history.log_event(
             "recording_requested",
             component="micro",
-            duration_seconds=5,
+            duration_seconds=duration,
             output_file=RECORDING_FILE_PATH,
         )
-        self._record(duration=5)
+        self._record(duration=duration)
         self._save_recording(RECORDING_FILE_PATH)
 
-    def _start_recording(self):
+    def _start_recording(self, max_buffer_seconds: Optional[float] = None):
         """
         Start recording audio from the selected device.
         Does nothing if a recording is already in progress.
+
+        Parameters:
+            max_buffer_seconds (float or None): Maximum duration kept in memory while recording.
+                If None, keep all collected samples until stop.
 
         Returns:
             None
@@ -99,6 +123,11 @@ class Micro:
             return
 
         self.audio_data = []
+        self._buffered_frames = 0
+        if max_buffer_seconds is None:
+            self._active_max_buffer_frames = None
+        else:
+            self._active_max_buffer_frames = max(1, int(float(max_buffer_seconds) * self.frequency))
 
         self.stream = sd.InputStream(
             samplerate=self.frequency,
@@ -116,6 +145,7 @@ class Micro:
             component="micro",
             frequency=self.frequency,
             device=self.device,
+            max_buffer_seconds=max_buffer_seconds,
         )
 
     def _get_stream(self, data, _frames, _time, status):
@@ -134,7 +164,15 @@ class Micro:
         if status:
             print(f"Status: {status}")
             bira_history.log_event("recording_stream_status", component="micro", status=str(status))
-        self.audio_data.append(data.copy())
+        chunk = data.copy()
+        self.audio_data.append(chunk)
+        self._buffered_frames += int(len(chunk))
+
+        max_frames = self._active_max_buffer_frames
+        if max_frames is not None:
+            while self.audio_data and self._buffered_frames > max_frames:
+                removed = self.audio_data.pop(0)
+                self._buffered_frames -= int(len(removed))
 
     def _stop_recording(self):
         """
@@ -156,6 +194,10 @@ class Micro:
 
         if self.audio_data:
             self.audio_data = np.concatenate(self.audio_data)
+        else:
+            self.audio_data = np.array([], dtype=np.int16)
+        self._active_max_buffer_frames = None
+        self._buffered_frames = int(len(self.audio_data))
         self.is_recording = False
         print("Recording stopped")
         sample_count = int(len(self.audio_data)) if self.audio_data is not None else 0
@@ -167,7 +209,7 @@ class Micro:
             duration_seconds=duration_seconds,
         )
 
-    def _record(self, duration=5):
+    def _record(self, duration=DEFAULT_RECORD_SECONDS):
         """
         Record audio automatically for a given duration.
 
@@ -175,8 +217,8 @@ class Micro:
             duration (int): Duration of the recording in seconds (default: 5).
         """
         print(f"Recording for {duration} seconds")
-        self._start_recording()
-        sd.sleep(duration * 1000)
+        self._start_recording(max_buffer_seconds=duration)
+        sd.sleep(max(1, int(float(duration) * 1000)))
         self._stop_recording()
         # TODO: change to sd.rec(...)
 

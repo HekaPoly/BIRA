@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from time import sleep
 
+from bira_components import history as bira_history
 from bira_components.SLM_Manager import SLM_Manager
 from bira_orchestration.enums import PlanificationCode
 
@@ -50,12 +51,36 @@ class MockedBiraController:
             ("language model", self.slm_manager.preload),
         ]
 
+        preload_summary = []
         for label, preload in preload_steps:
             print(f"Preloading {label}...")
             try:
                 preload()
+                preload_summary.append({"component": label, "status": "ready"})
+                bira_history.log_event(
+                    "component_preload_result",
+                    component="mock_controller",
+                    target=label,
+                    status="ready",
+                )
             except Exception as exc:
                 print(f"Unable to preload {label}: {exc}")
+                preload_summary.append({"component": label, "status": "failed", "error": str(exc)})
+                bira_history.log_event(
+                    "component_preload_result",
+                    component="mock_controller",
+                    target=label,
+                    status="failed",
+                    error=str(exc),
+                )
+
+        bira_history.log_event(
+            "component_preload_summary",
+            component="mock_controller",
+            ready_count=sum(1 for item in preload_summary if item.get("status") == "ready"),
+            total_count=len(preload_summary),
+            results=preload_summary,
+        )
 
     def sleep_mode(self):
         input("[MOCK:WAKE] Press Enter to wake BIRA... ")
@@ -64,6 +89,7 @@ class MockedBiraController:
         transcription = input("[MOCK:USER_INPUT] ").strip()
         if transcription.lower() in {"q", "quit", "exit"}:
             return "stop"
+        bira_history.log_conversation("user", transcription, source="mock_input")
         return transcription
 
     def vision(self):
@@ -102,6 +128,7 @@ class MockedBiraController:
         sleep(0.3)
 
     def speak(self, text):
+        bira_history.log_conversation("assistant", text, source="mock_tts")
         print(f"\n=== BIRA_FEEDBACK ===\n{text}\n=====================\n")
 
     def prompt_slm(self, context):
@@ -112,6 +139,14 @@ class MockedBiraController:
             user_input = None
         detected_objects = context.objects_detected if context.objects_detected else None
 
+        bira_history.log_event(
+            "planning_request_started",
+            component="mock_controller",
+            user_input=user_input or "",
+            object_count=len(detected_objects or []),
+            detection_labels=context.detection_labels or [],
+        )
+
         self.slm_manager.set_transcription(user_input or "")
         self.slm_manager.set_detections(
             detection_labels=context.detection_labels,
@@ -119,7 +154,29 @@ class MockedBiraController:
             computer_vision=self.computer_vision,
         )
 
-        return self.slm_manager.run_inference()
+        response = self.slm_manager.run_inference()
+        bira_history.log_event(
+            "planning_request_completed",
+            component="mock_controller",
+            backend=self.slm_manager.last_backend,
+            mode=response.get("mode"),
+            request_scope=response.get("request_scope"),
+            selected_candidate_index=response.get("selected_candidate_index"),
+            selected_label=response.get("selected_label"),
+            selected_label_id=response.get("selected_label_id"),
+        )
+        bira_history.log_conversation(
+            "assistant_planning",
+            response.get("response", ""),
+            source="slm_manager",
+            backend=self.slm_manager.last_backend,
+            mode=response.get("mode"),
+            request_scope=response.get("request_scope"),
+            selected_candidate_index=response.get("selected_candidate_index"),
+            selected_label=response.get("selected_label"),
+            selected_label_id=response.get("selected_label_id"),
+        )
+        return response
 
     def destroy(self):
         components = [
