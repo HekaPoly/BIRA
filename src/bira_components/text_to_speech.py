@@ -1,25 +1,32 @@
 import pyttsx3
 import random
 
+MAX_LEN = 180
+
 class TextToSpeech:
-    def __init__(self, voice: str = None, rate: int = 130, volume: float = 0.8):
+    
+    def __init__(self, voice: str = 'en', rate: int = 130, volume: float = 0.1):
         self.engine = pyttsx3.init()
         self.rate = rate
         self.volume = volume
         self.engine.setProperty('rate', self.rate)
         self.engine.setProperty('volume', self.volume)
         self.engine.setProperty('voice', voice)
-        
 
+    def preload(self):
+        print("Preloading text-to-speech engine...")
+        _ = self.engine.getProperty('voices')
+        _ = self.engine.getProperty('voice')
+        _ = self.engine.getProperty('rate')
+        print("Text-to-speech engine ready.")
+
+            
     def speak(self, text: str):
         """
         Convert the given text to speech and play it.
         Parameters:
             text (str): The text to be converted to speech.
-        Returns:
-            None
         """
-        MAX_LEN = 180
 
         for i in range(0, len(text), MAX_LEN):
             chunk = text[i:i+MAX_LEN]
@@ -33,10 +40,6 @@ class TextToSpeech:
     def stop(self):
         """
         Stop the speech engine.
-        Parameters:
-            None
-        Returns:
-            None
         """
         self.engine.stop()
 
@@ -44,5 +47,5 @@ if __name__== "__main__":
     tts = TextToSpeech(voice="fr+f3")
     print("Testing TTS...", flush=True)
 
-    text = """Voici les objets que j'ai détectés : person, ordinateur portable, ... etc."""
+    text = "Here are the objects I detected: person, laptop, etc."
     tts.speak(text)

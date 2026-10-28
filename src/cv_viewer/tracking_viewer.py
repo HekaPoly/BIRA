@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import cv_viewer.labels as labels
 
 from cv_viewer.utils import *
 import pyzed.sl as sl
@@ -42,7 +41,7 @@ def get_image_position(bounding_box_image, img_scale):
     return out_position
 
 
-def render_2D(left_display, img_scale, objects, is_tracking_on, label = None):
+def render_2D(left_display, img_scale, objects, is_tracking_on, label=None, computer_vision=None):
     """Renders the detected objects on the camera image.
     Parameters:
         left_display (np.array): The image from the left lens
@@ -50,6 +49,7 @@ def render_2D(left_display, img_scale, objects, is_tracking_on, label = None):
         objects (sl.Objects): The object containing the results of the detection.
         is_tracking_on (bool): Represents if the tracking is activated or not.
         label (optional int): The integer corresponding to the object. If none, all objects are rendered.
+        computer_vision: ComputerVision instance for label name resolution
     Returns:
         None
     """
@@ -88,7 +88,11 @@ def render_2D(left_display, img_scale, objects, is_tracking_on, label = None):
             # Display Object label as text
             position_image = get_image_position(obj.bounding_box_2d, img_scale)
             text_position = (int(position_image[0] - 20), int(position_image[1] - 12))
-            text = labels.labelDict[int(obj.raw_label)]  
+            # Get label name from computer_vision if available, otherwise use raw label
+            if computer_vision:
+                text = computer_vision.get_label_name(int(obj.raw_label))
+            else:
+                text = f"label_{int(obj.raw_label)}"
             text_color = (255, 255, 255, 255)
             cv2.putText(left_display, text, text_position, cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.5, text_color, 1)
 
@@ -195,7 +199,7 @@ class TrackingViewer:
     #       Drawing functions
     # ----------------------------------------------------------------------
 
-    def draw_points(self, objects, tracking_view, current_camera_pose):
+    def draw_points(self, objects, tracking_view, current_camera_pose, computer_vision=None):
         for obj in objects:
             if obj.raw_label != 0 : continue
             if (not np.isfinite(obj.position[0])):
@@ -204,7 +208,12 @@ class TrackingViewer:
             pt = TrackPoint(obj.position)
             cv_start_point = self.to_cv_point(pt.get_xyz(), current_camera_pose)
             cv2.circle(tracking_view, (int(cv_start_point[0]), int(cv_start_point[1])), 6, clr, 2)
-            cv2.putText(tracking_view, labels.labelDict[int(obj.raw_label)], (int(cv_start_point[0])+ 7, int(cv_start_point[1])), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.5, (255,0,0), 1)
+            # Get label name from computer_vision if available, otherwise use raw label
+            if computer_vision:
+                label_text = computer_vision.get_label_name(int(obj.raw_label))
+            else:
+                label_text = f"label_{int(obj.raw_label)}"
+            cv2.putText(tracking_view, label_text, (int(cv_start_point[0])+ 7, int(cv_start_point[1])), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.5, (255,0,0), 1)
             cv2.putText(tracking_view, str(-round(obj.position[2],2)), (int(cv_start_point[0])+ 5, int(cv_start_point[1])+ 10), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.5, (255,0,0), 1)
 
     def draw_tracklets(self, tracking_view, current_camera_pose):
