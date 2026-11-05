@@ -14,7 +14,7 @@ class MockObject:
         self.confidence = confidence
         self.bounding_box_2d = [[0, 0], [10, 10]]
 
-# Test 1: Router prompt with no candidates
+# Test 1: Router prompt with no candidates .
 print("=" * 60)
 print("Test 1: Router prompt with NO pending clarification")
 print("=" * 60)
