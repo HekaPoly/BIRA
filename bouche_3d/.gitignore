@@ -1,0 +1,26 @@
+# Environnement et caches Python
+.venv/
+__pycache__/
+*.pyc
+
+# Données volumineuses (enregistrements caméra, vidéos, captures)
+data/*
+!data/.gitkeep
+*.svo
+*.svo2
+*.mp4
+*.avi
+# Captures d'écran et photos (risque de visages)
+*.png
+*.jpg
+*.jpeg
+
+# Éditeur / système
+.idea/
+.DS_Store
+
+# Outils de développement et secrets
+.vscode/
+.pytest_cache/
+*.egg-info/
+.env

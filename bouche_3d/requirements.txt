@@ -1,0 +1,6 @@
+# Bibliothèques Python prévues pour le module (liste provisoire, à ajuster avec le code).
+numpy
+pytest
+opencv-python
+mediapipe
+# pyzed (module Python de la ZED) ne s'installe pas avec pip : il est fourni avec le ZED SDK de Stereolabs.
