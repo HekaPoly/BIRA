@@ -1,6 +1,16 @@
-# Bibliothèques Python prévues pour le module (liste provisoire, à ajuster avec le code).
-numpy
+# Bibliothèques Python du module.
+# numpy et opencv-python : mêmes versions que le pyproject.toml racine de BIRA (décision D16).
+# pyzed 4.1 (wheel de BIRA) exige numpy < 2.
+numpy==1.23.5
+opencv-python==4.10.0.84
 pytest
-opencv-python
-mediapipe
+
+# mediapipe (détection de la bouche, décision D2) : 0.10.31 est la seule version qui accepte
+# numpy 1.23.5 sans installer opencv-contrib-python (un second paquet cv2).
+# - Elle n'existe pas pour le Jetson (aarch64) : le marqueur ci-dessous l'ignore là-bas.
+#   Sur le Jetson, les versions avec une wheel aarch64 (0.10.18, 1.x) installent opencv-contrib-python :
+#   question ouverte, à régler avec la binôme et l'équipe.
+# - Elle ne fournit que l'API « tasks » (FaceLandmarker, modèle .task à télécharger), pas mp.solutions.
+mediapipe==0.10.31; platform_machine != "aarch64"
+
 # pyzed (module Python de la ZED) ne s'installe pas avec pip : il est fourni avec le ZED SDK de Stereolabs.
