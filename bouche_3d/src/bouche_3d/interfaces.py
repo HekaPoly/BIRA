@@ -36,6 +36,7 @@ Les quatre interfaces
 # ---------------------------------------------------------------------------
 
 from dataclasses import dataclass
+from enum import Enum
 
 
 @dataclass(frozen=True)
@@ -82,3 +83,47 @@ class Position3D:
     def invalide(cls, heure: float) -> "Position3D":
         """Crée une position « invalide » à l'heure donnée."""
         return cls(None, None, None, False, heure)
+
+
+# ---------------------------------------------------------------------------
+# PROPOSITION, à valider avec la binôme et l'équipe.
+# Interface « stabilité → envoi au bras » : la cible stabilisée et son état.
+# ---------------------------------------------------------------------------
+
+class Etat(Enum):
+    """État de fiabilité du suivi (docs/mandat.md, section 3)."""
+
+    RECHERCHE = "recherche"  # aucune bouche suivie : pas de cible
+    SUIVI = "suivi"          # position valide, mais pas encore le moment d'avancer
+    PRET = "pret"            # bouche ouverte et position stable : le bras peut avancer
+    PERDU = "perdu"          # suivi interrompu : le bras s'arrête
+
+
+@dataclass(frozen=True)
+class CibleStabilisee:
+    """Interface « stabilité → envoi au bras ».
+
+    etat : état de fiabilité.
+    x, y, z : position lissée en mètres, repère de la caméra. Toujours None en RECHERCHE et
+        en PERDU : le bras ne doit jamais viser une position périmée.
+    derniere_position_connue : dernière position (x, y, z) publiée en SUIVI ou PRET, ou None.
+        Pour information seulement (affichage, journal) : ne jamais la viser.
+    stable_depuis : depuis combien de secondes la position lissée ne bouge plus (0 hors SUIVI et PRET).
+    heure : heure de la décision, en secondes.
+    """
+
+    etat: Etat
+    x: float | None
+    y: float | None
+    z: float | None
+    derniere_position_connue: tuple[float, float, float] | None
+    stable_depuis: float
+    heure: float
+
+    def __post_init__(self) -> None:
+        coordonnees = (self.x, self.y, self.z)
+        if self.etat in (Etat.RECHERCHE, Etat.PERDU):
+            if any(c is not None for c in coordonnees):
+                raise ValueError(f"CibleStabilisee en {self.etat.name} : x, y et z doivent valoir None.")
+        elif any(c is None for c in coordonnees):
+            raise ValueError(f"CibleStabilisee en {self.etat.name} : x, y et z doivent être des nombres.")
