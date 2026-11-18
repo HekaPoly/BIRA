@@ -410,8 +410,14 @@ def composer_ecran(trame: Trame, etat: Etat, nom_source: str, etiquettes: list) 
 # ---------------------------------------------------------------------------
 
 def lire_arguments() -> argparse.Namespace:
-    parseur = argparse.ArgumentParser(description="Clic = position 3D du pixel.")
-    parseur.add_argument("--source", choices=NOMS_SOURCES, default="simulation")
+    parseur = argparse.ArgumentParser(
+        description="Clic = position 3D du pixel.",
+        epilog="La source « bira » n'est pas proposée ici : elle lit la caméra déjà ouverte "
+               "par BIRA et ne s'utilise que depuis BIRA (creer_source(\"bira\", camera=...)).",
+    )
+    # « bira » exclue : impossible sans un BIRA en marche qui a ouvert la caméra.
+    sources_demo = [nom for nom in NOMS_SOURCES if nom != "bira"]
+    parseur.add_argument("--source", choices=sources_demo, default="simulation")
     parseur.add_argument("--fichier", help="fichier .svo (source svo)")
     parseur.add_argument("--dossier", default=str(DOSSIER_DATA), help="dossier des trames .npz (source npy)")
     parseur.add_argument("--rayon", type=int, default=5, help="demi-côté de la zone de mesure (pixels)")

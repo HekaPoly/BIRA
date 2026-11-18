@@ -5,10 +5,13 @@ Rôle
     la caméra est une ZED. Toutes les sources s'utilisent de la même façon :
     - une webcam (pour développer la détection sans ZED) ;
     - la ZED Mini en direct ;
-    - un enregistrement de la ZED (fichier .svo), pour rejouer les mêmes images.
+    - un enregistrement de la ZED (fichier .svo), pour rejouer les mêmes images ;
+    - la caméra déjà ouverte par BIRA (source « bira », décision D14) : c'est la source
+      à utiliser une fois le module branché, car une ZED ne s'ouvre qu'une fois.
 
 Reçoit
-    Le choix de la source (webcam, ZED ou chemin d'un fichier .svo) et ses réglages.
+    Le choix de la source (webcam, ZED, chemin d'un fichier .svo ou objet Camera de BIRA)
+    et ses réglages.
 
 Produit
     À chaque image :
@@ -44,6 +47,13 @@ Terminée quand
     - Le nuage de la ZED a 4 valeurs par pixel (X, Y, Z, couleur) : ne garder que X, Y, Z.
     - Les mesures ratées valent NaN ou inf : ne pas les corriger ici, position_3d.py s'en charge.
     - Utiliser l'image gauche de la ZED : c'est celle qui correspond au nuage de points.
+    - Comparer le résultat de grab() à sl.ERROR_CODE.SUCCESS : un code d'erreur est
+      « vrai » en Python, « if grab(): » ne détecte donc pas les échecs.
+    - L'heure d'une trame ZED est l'horodatage de l'image (TIME_REFERENCE.IMAGE), en secondes.
+    - Source « bira » : ne jamais ouvrir ni fermer la caméra, qui appartient à BIRA. BIRA l'ouvre
+      avec les réglages par défaut (millimètres probables) : la source convertit en mètres
+      (décision D15). Elle n'importe rien de BIRA : elle utilise seulement camera.get_camera()
+      et camera.grab().
 
 Réglages à choisir (puis noter dans docs/decisions.md)
     Résolution, nombre d'images par seconde, mode de profondeur de la ZED, distance minimale.
@@ -64,7 +74,27 @@ import numpy as np
 MESSAGE_SANS_ZED = "ZED SDK non installé (carte NVIDIA nécessaire)"
 
 # Noms acceptés par creer_source.
-NOMS_SOURCES = ("webcam", "simulation", "npy", "zed", "svo")
+NOMS_SOURCES = ("webcam", "simulation", "npy", "zed", "svo", "bira")
+
+# Nombre d'échecs de grab() consécutifs avant d'abandonner la lecture (SourceZed).
+MAX_ECHECS_GRAB = 10
+
+# Unités d'entrée acceptées par SourceBira : lue sur la caméra, millimètres ou mètres.
+UNITES_ENTREE = ("auto", "mm", "m")
+
+
+def _importer_pyzed():
+    """Importe pyzed.sl au moment voulu, avec un message clair s'il manque."""
+    try:
+        import pyzed.sl as sl
+    except ImportError as erreur:
+        raise RuntimeError(MESSAGE_SANS_ZED) from erreur
+    return sl
+
+
+def _heure_image(sl, zed) -> float:
+    """Horodatage de la dernière image de la ZED, en secondes."""
+    return zed.get_timestamp(sl.TIME_REFERENCE.IMAGE).get_nanoseconds() / 1e9
 
 
 @dataclass
@@ -298,10 +328,7 @@ class SourceZed(Source):
         self.camera = None
 
     def ouvrir(self) -> None:
-        try:
-            import pyzed.sl as sl
-        except ImportError as erreur:
-            raise RuntimeError(MESSAGE_SANS_ZED) from erreur
+        sl = _importer_pyzed()
         self.sl = sl
 
         parametres = sl.InitParameters()
@@ -324,16 +351,22 @@ class SourceZed(Source):
         if self.camera is None:
             return None
         sl = self.sl
-        code = self.camera.grab(self.runtime)
-        if code == sl.ERROR_CODE.END_OF_SVOFILE_REACHED:
-            return None  # fin du fichier .svo
-        if code != sl.ERROR_CODE.SUCCESS:
-            return None  # caméra débranchée ou autre erreur
+        # Une erreur passagère ne termine pas la lecture : on réessaie.
+        echecs = 0
+        while True:
+            code = self.camera.grab(self.runtime)
+            if code == sl.ERROR_CODE.SUCCESS:
+                break
+            if code == sl.ERROR_CODE.END_OF_SVOFILE_REACHED:
+                return None  # fin du fichier .svo
+            echecs += 1
+            if echecs >= MAX_ECHECS_GRAB:
+                return None  # caméra débranchée ou panne durable
         self.camera.retrieve_image(self.mat_image, sl.VIEW.LEFT)
         self.camera.retrieve_measure(self.mat_nuage, sl.MEASURE.XYZRGBA)
         image = cv2.cvtColor(self.mat_image.get_data(), cv2.COLOR_BGRA2BGR)
         nuage = self.mat_nuage.get_data()[:, :, :3].copy()  # X, Y, Z seulement
-        return Trame(image, nuage, time.time())
+        return Trame(image, nuage, _heure_image(sl, self.camera))
 
     def fermer(self) -> None:
         if self.camera is not None:
@@ -342,13 +375,94 @@ class SourceZed(Source):
 
 
 # ---------------------------------------------------------------------------
-# e. Choix de la source par son nom
+# e. Caméra de BIRA (déjà ouverte par BIRA)
+# ---------------------------------------------------------------------------
+
+class SourceBira(Source):
+    """Lit la ZED déjà ouverte par BIRA, sans jamais l'ouvrir ni la fermer (décision D14).
+
+    camera : objet Camera de BIRA (src/bira_components/camera.py). Seules ses méthodes
+        get_camera() et grab() sont utilisées ; rien n'est importé de BIRA.
+    unite_entree : unité du nuage fourni par la caméra : "auto" (lue sur la caméra),
+        "mm" ou "m". Le nuage rendu est toujours en mètres (décision D15).
+    faire_grab : True si cette source doit appeler grab() elle-même ; False (défaut) si
+        BIRA s'en charge et qu'on lit seulement la dernière image.
+    """
+
+    def __init__(self, camera, unite_entree: str = "auto", faire_grab: bool = False) -> None:
+        if unite_entree not in UNITES_ENTREE:
+            raise ValueError(f"unite_entree inconnue : {unite_entree!r}. Valeurs permises : "
+                             f"{', '.join(UNITES_ENTREE)}.")
+        self.camera = camera
+        self.unite_entree = unite_entree
+        self.faire_grab = faire_grab
+        self.sl = None
+        self.mat_image = None
+        self.mat_nuage = None
+
+    def ouvrir(self) -> None:
+        sl = _importer_pyzed()
+        if not self.camera.get_camera().is_opened():
+            raise RuntimeError("Source bira : la caméra doit être ouverte par BIRA "
+                               "(Camera.open()) avant ouvrir() ; cette source ne l'ouvre jamais.")
+        self.sl = sl
+        # Nos propres sl.Mat, créées une seule fois : on ne partage pas l'image de BIRA.
+        if self.mat_image is None:
+            self.mat_image = sl.Mat()
+            self.mat_nuage = sl.Mat()
+
+    def _facteur_metres(self, zed) -> float:
+        """Facteur qui convertit le nuage de la caméra en mètres."""
+        if self.unite_entree == "mm":
+            return 0.001
+        if self.unite_entree == "m":
+            return 1.0
+        unite = zed.get_init_parameters().coordinate_units
+        if unite == self.sl.UNIT.MILLIMETER:
+            return 0.001
+        if unite == self.sl.UNIT.METER:
+            return 1.0
+        # Mieux vaut s'arrêter que deviner : une erreur d'unité fausse toute la position.
+        raise ValueError(f"Unité de la caméra non prise en charge : {unite}. "
+                         "Attendu : MILLIMETER ou METER (ou donner unite_entree).")
+
+    def lire(self) -> Trame | None:
+        if self.mat_image is None:
+            return None  # source pas ouverte
+        sl = self.sl
+        if self.faire_grab and self.camera.grab() != sl.ERROR_CODE.SUCCESS:
+            return None  # grab raté : pas d'image cette fois
+        zed = self.camera.get_camera()
+        if zed.retrieve_image(self.mat_image, sl.VIEW.LEFT) != sl.ERROR_CODE.SUCCESS:
+            return None
+        if zed.retrieve_measure(self.mat_nuage, sl.MEASURE.XYZRGBA) != sl.ERROR_CODE.SUCCESS:
+            return None
+        facteur = self._facteur_metres(zed)
+        # Copies systématiques : les sl.Mat sont réécrites à l'image suivante.
+        image = cv2.cvtColor(self.mat_image.get_data(), cv2.COLOR_BGRA2BGR).copy()
+        nuage = self.mat_nuage.get_data()[:, :, :3].copy()  # X, Y, Z seulement
+        if facteur != 1.0:
+            nuage *= facteur
+        return Trame(image, nuage, _heure_image(sl, zed))
+
+    def fermer(self) -> None:
+        # Libère seulement nos sl.Mat ; la caméra reste ouverte pour BIRA.
+        for mat in (self.mat_image, self.mat_nuage):
+            if mat is not None:
+                mat.free()
+        self.mat_image = None
+        self.mat_nuage = None
+
+
+# ---------------------------------------------------------------------------
+# f. Choix de la source par son nom
 # ---------------------------------------------------------------------------
 
 def creer_source(nom: str, **options) -> Source:
-    """Crée une source, sans l'ouvrir : "webcam", "simulation", "npy", "zed" ou "svo".
+    """Crée une source, sans l'ouvrir : "webcam", "simulation", "npy", "zed", "svo" ou "bira".
 
-    Exemples : creer_source("npy", dossier="data") ; creer_source("svo", fichier_svo="essai.svo").
+    Exemples : creer_source("npy", dossier="data") ; creer_source("svo", fichier_svo="essai.svo") ;
+    creer_source("bira", camera=controller.camera).
     """
     if nom == "webcam":
         return SourceWebcam(**options)
@@ -362,4 +476,8 @@ def creer_source(nom: str, **options) -> Source:
         if options.get("fichier_svo") is None:
             raise ValueError("La source « svo » demande fichier_svo (chemin du fichier .svo).")
         return SourceZed(**options)
+    if nom == "bira":
+        if options.get("camera") is None:
+            raise ValueError("La source « bira » demande camera (l'objet Camera de BIRA, déjà ouvert).")
+        return SourceBira(**options)
     raise ValueError(f"Source inconnue : {nom!r}. Noms permis : {', '.join(NOMS_SOURCES)}.")
