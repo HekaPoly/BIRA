@@ -159,10 +159,11 @@ class ComputerVision:
         output[1][0] = x_max
         output[1][1] = y_min
 
-        output[2][0] = x_min
+        # The ZED SDK expects the corners in clockwise order (A, B, C, D)
+        output[2][0] = x_max
         output[2][1] = y_max
 
-        output[3][0] = x_max
+        output[3][0] = x_min
         output[3][1] = y_max
         return output
 
