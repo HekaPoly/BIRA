@@ -48,6 +48,8 @@ class ComputerVision:
             )
         self.__camera = camera
         self.__last_masks = {}
+        self.__last_yolo = []
+        self.__zed_error = ""
 
         print("Intializing Network(YOLO)...")
         self.yolo = YOLO(self.__opt.weights)
@@ -211,6 +213,16 @@ class ComputerVision:
         return cv2.cvtColor(hsv_filtered, cv2.COLOR_HSV2BGR)
     
     @property
+    def last_yolo_boxes(self):
+        """list[tuple]: raw YOLO detections (x1, y1, x2, y2, class_id, conf) of the last detect() call."""
+        return self.__last_yolo
+
+    @property
+    def zed_error(self):
+        """str: last ZED ingest/retrieve error, empty if the last call succeeded."""
+        return self.__zed_error
+
+    @property
     def last_masks(self):
         """dict[int, np.ndarray]: SAM mask (HxW bool) by ZED object unique id, from the last refined detect()."""
         return self.__last_masks
@@ -264,10 +276,15 @@ class ComputerVision:
         detections = self.yolo.predict(img, save=False, imgsz=self.__opt.img_size, conf=self.__opt.conf_thres,
                         iou=iou_thres)[0].cpu().numpy().boxes
         self.__detections = self.__detections_to_custom_box(detections)
+        self.__last_yolo = [(*xyxy, int(c), float(p)) for xyxy, c, p in
+                            zip(detections.xyxy.tolist(), detections.cls.tolist(), detections.conf.tolist())]
         
         # -- Ingest detections
-        self.__camera.get_camera().ingest_custom_box_objects(self.__detections)
-        self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
+        ingest_status = self.__camera.get_camera().ingest_custom_box_objects(self.__detections)
+        retrieve_status = self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
+        errors = [f"{name}: {repr(st)}" for name, st in (("ingest", ingest_status), ("retrieve", retrieve_status))
+                  if st != sl.ERROR_CODE.SUCCESS]
+        self.__zed_error = "ZED " + ", ".join(errors) if errors else ""
 
         object_list = objects.object_list
         self.__last_masks = {}

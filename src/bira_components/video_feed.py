@@ -140,6 +140,7 @@ class VideoFeed:
         display = frame.copy()  # the camera buffer is overwritten on the next grab
         n_objects = None
         n_masks = 0
+        yolo_boxes = self.__cv.last_yolo_boxes
         if objects is not None:
             n_objects = len(objects.object_list)
             try:
@@ -151,11 +152,19 @@ class VideoFeed:
                 render_2D(display, [1.0, 1.0], objects, False, computer_vision=self.__cv)
             except Exception as exc:
                 self.__report_error("Box drawing", exc)
+            if n_objects == 0:
+                # The ZED SDK returned nothing: draw YOLO's raw boxes (in red) so they are still visible.
+                for x1, y1, x2, y2, cls_id, conf in yolo_boxes:
+                    cv2.rectangle(display, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255, 255), 2)
+                    cv2.putText(display, f"{self.__cv.get_label_name(cls_id)} {conf:.2f}", (int(x1), max(int(y1) - 5, 12)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255, 255), 1)
 
         lines = [
             f"SAM: {'ON' if self.__sam_overlay else 'OFF'} (press s, window must be focused)",
-            f"FPS: {self.__fps:.1f}  objects: {'n/a' if n_objects is None else n_objects}  masks: {n_masks}",
+            f"FPS: {self.__fps:.1f}  yolo: {len(yolo_boxes)}  zed objects: {'n/a' if n_objects is None else n_objects}  masks: {n_masks}",
         ]
+        if self.__cv.zed_error:
+            lines.append(self.__cv.zed_error[:90])
         if self.__last_error:
             lines.append(self.__last_error[:90])
         for i, line in enumerate(lines):

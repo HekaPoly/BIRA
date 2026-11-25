@@ -52,7 +52,9 @@ class Camera:
             obj_param = sl.ObjectDetectionParameters()
             obj_param.detection_model = sl.OBJECT_DETECTION_MODEL.CUSTOM_BOX_OBJECTS
             obj_param.enable_tracking = False
-            self.__zed.enable_object_detection(obj_param)
+            od_status = self.__zed.enable_object_detection(obj_param)
+            if od_status != sl.ERROR_CODE.SUCCESS:
+                print(f"[Camera] enable_object_detection failed: {repr(od_status)}. The ZED SDK will return no objects.")
     
     def grab(self, runtime_params = sl.RuntimeParameters()):
         """Grabs the latest images from the camera, rectify them, and compute the measurements based on the RuntimeParameters provided.
