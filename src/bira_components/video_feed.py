@@ -1,7 +1,8 @@
 import os
 import sys
 import threading
-from time import sleep
+import traceback
+from time import perf_counter, sleep
 
 import cv2
 import numpy as np
@@ -42,6 +43,9 @@ class VideoFeed:
         self.__lock = threading.Lock()
         self.__pending = None
         self.__sam_overlay = sam_overlay
+        self.__last_error = ""
+        self.__fps = 0.0
+        self.__last_tick = perf_counter()
 
     @staticmethod
     def __display_available():
@@ -105,7 +109,7 @@ class VideoFeed:
                     else:
                         objects = self.__cv.detect(frame, refine=self.__sam_overlay, log=False)
                 except Exception as exc:
-                    print(f"[VideoFeed] Detection failed: {exc}")
+                    self.__report_error("Detection", exc)
                 finally:
                     if request is not None:
                         request.event.set()
@@ -120,20 +124,54 @@ class VideoFeed:
                     pass
             self.__camera.close()
 
+    def __report_error(self, stage, exc):
+        message = f"{stage} failed: {type(exc).__name__}: {exc}"
+        if message != self.__last_error:  # print each distinct error once, not every frame
+            print(f"[VideoFeed] {message}")
+            traceback.print_exc()
+        self.__last_error = message
+
     def __show(self, frame, objects):
-        try:
-            display = frame.copy()  # the camera buffer is overwritten on the next grab
-            if objects is not None:
+        """Always imshow + waitKey, whatever happens while drawing, so the window and the keys stay alive."""
+        now = perf_counter()
+        self.__fps = 0.9 * self.__fps + 0.1 / max(now - self.__last_tick, 1e-6)
+        self.__last_tick = now
+
+        display = frame.copy()  # the camera buffer is overwritten on the next grab
+        n_objects = None
+        n_masks = 0
+        if objects is not None:
+            n_objects = len(objects.object_list)
+            try:
                 self.__draw_masks(display, objects)
+                n_masks = len(self.__cv.last_masks)
+            except Exception as exc:
+                self.__report_error("Mask drawing", exc)
+            try:
                 render_2D(display, [1.0, 1.0], objects, False, computer_vision=self.__cv)
-            label = "SAM: ON" if self.__sam_overlay else "SAM: OFF (press s)"
-            cv2.putText(display, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255, 255), 2)
+            except Exception as exc:
+                self.__report_error("Box drawing", exc)
+
+        lines = [
+            f"SAM: {'ON' if self.__sam_overlay else 'OFF'} (press s, window must be focused)",
+            f"FPS: {self.__fps:.1f}  objects: {'n/a' if n_objects is None else n_objects}  masks: {n_masks}",
+        ]
+        if self.__last_error:
+            lines.append(self.__last_error[:90])
+        for i, line in enumerate(lines):
+            cv2.putText(display, line, (10, 25 + 25 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0, 255), 3)
+            cv2.putText(display, line, (10, 25 + 25 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255, 255), 1)
+
+        try:
             cv2.imshow(self.WINDOW_NAME, display)
-            if cv2.waitKey(1) & 0xFF == ord("s"):  # waitKey is also required for the window to refresh
-                self.__sam_overlay = not self.__sam_overlay
+            key = cv2.waitKey(1) & 0xFF
         except Exception as exc:
             print(f"[VideoFeed] Video window failed ({exc}). Disabling it.")
             self.__show_window = False
+            return
+        if key == ord("s"):
+            self.__sam_overlay = not self.__sam_overlay
+            print(f"[VideoFeed] SAM overlay {'ON' if self.__sam_overlay else 'OFF'}")
 
     def __draw_masks(self, display, objects):
         masks = self.__cv.last_masks
