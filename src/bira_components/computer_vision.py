@@ -47,6 +47,7 @@ class ComputerVision:
                 use_sam=getattr(opt, "use_sam", default_opt.use_sam),
             )
         self.__camera = camera
+        self.__last_masks = {}
 
         print("Intializing Network(YOLO)...")
         self.yolo = YOLO(self.__opt.weights)
@@ -209,6 +210,11 @@ class ComputerVision:
         hsv_filtered = cv2.merge([h, s, v])
         return cv2.cvtColor(hsv_filtered, cv2.COLOR_HSV2BGR)
     
+    @property
+    def last_masks(self):
+        """dict[int, np.ndarray]: SAM mask (HxW bool) by ZED object unique id, from the last refined detect()."""
+        return self.__last_masks
+
     def __refine_positions_with_masks(self, img_rgb, detections, object_list):
         """Replace each ZED object's position with the median 3D point under its SAM mask.
 
@@ -222,6 +228,7 @@ class ComputerVision:
                 return
             masks = self.segmenter.segment(img_rgb, detections.xyxy.tolist())
             mask_by_id = {box.unique_object_id: mask for box, mask in zip(self.__detections, masks)}
+            self.__last_masks = mask_by_id
             for obj in object_list:
                 mask = mask_by_id.get(obj.unique_object_id)
                 if mask is None:
@@ -263,6 +270,7 @@ class ComputerVision:
         self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
 
         object_list = objects.object_list
+        self.__last_masks = {}
         if refine:
             self.__refine_positions_with_masks(img, detections, object_list)
         if log:

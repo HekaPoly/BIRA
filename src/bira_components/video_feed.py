@@ -4,9 +4,11 @@ import threading
 from time import sleep
 
 import cv2
+import numpy as np
 import pyzed.sl as sl
 
 from cv_viewer.tracking_viewer import render_2D
+from cv_viewer.utils import generate_color_id_u
 
 
 class _VisionRequest:
@@ -31,7 +33,7 @@ class VideoFeed:
 
     WINDOW_NAME = "BIRA vision"
 
-    def __init__(self, camera, computer_vision, show_window=True):
+    def __init__(self, camera, computer_vision, show_window=True, sam_overlay=False):
         self.__camera = camera
         self.__cv = computer_vision
         self.__show_window = show_window and self.__display_available()
@@ -39,6 +41,7 @@ class VideoFeed:
         self.__stop = threading.Event()
         self.__lock = threading.Lock()
         self.__pending = None
+        self.__sam_overlay = sam_overlay
 
     @staticmethod
     def __display_available():
@@ -59,7 +62,7 @@ class VideoFeed:
         self.__stop.clear()
         self.__thread = threading.Thread(target=self.__run, name="VideoFeed", daemon=True)
         self.__thread.start()
-        print("[VideoFeed] Live video started.")
+        print("[VideoFeed] Live video started. Press 's' in the video window to toggle SAM masks.")
 
     def request_detection(self, timeout=15.0):
         """
@@ -100,7 +103,7 @@ class VideoFeed:
                         request.result = self.__cv.detect_objects(frame)
                         objects = request.result[0]
                     else:
-                        objects = self.__cv.detect(frame, refine=False, log=False)
+                        objects = self.__cv.detect(frame, refine=self.__sam_overlay, log=False)
                 except Exception as exc:
                     print(f"[VideoFeed] Detection failed: {exc}")
                 finally:
@@ -121,12 +124,31 @@ class VideoFeed:
         try:
             display = frame.copy()  # the camera buffer is overwritten on the next grab
             if objects is not None:
+                self.__draw_masks(display, objects)
                 render_2D(display, [1.0, 1.0], objects, False, computer_vision=self.__cv)
+            label = "SAM: ON" if self.__sam_overlay else "SAM: OFF (press s)"
+            cv2.putText(display, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255, 255), 2)
             cv2.imshow(self.WINDOW_NAME, display)
-            cv2.waitKey(1)  # required for the window to refresh
+            if cv2.waitKey(1) & 0xFF == ord("s"):  # waitKey is also required for the window to refresh
+                self.__sam_overlay = not self.__sam_overlay
         except Exception as exc:
             print(f"[VideoFeed] Video window failed ({exc}). Disabling it.")
             self.__show_window = False
+
+    def __draw_masks(self, display, objects):
+        masks = self.__cv.last_masks
+        if not masks:
+            return
+        layer = display.copy()
+        for obj in objects.object_list:
+            mask = masks.get(obj.unique_object_id)
+            if mask is None or mask.shape != display.shape[:2]:
+                continue
+            color = generate_color_id_u(obj.id)
+            layer[mask] = color
+            contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(display, contours, -1, color, 2)
+        cv2.addWeighted(layer, 0.5, display, 0.5, 0.0, display)
 
     def destroy(self):
         self.__stop.set()
