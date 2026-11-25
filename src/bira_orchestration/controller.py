@@ -7,6 +7,7 @@ from bira_components.SLM_Manager import SLM_Manager
 from bira_components.speech_to_text import SpeechToText
 from bira_components.text_to_speech import TextToSpeech
 from bira_components.uart_transmitter import UARTTransmitter
+from bira_components.video_feed import VideoFeed
 from bira_orchestration.enums import PlanificationCode
 
 
@@ -17,6 +18,7 @@ class BiraController:
         #  components. Maybe we can have a shared memory or a shared database where the camera can write the frames and
         #  the computer vision can read them.
         self.computer_vision = ComputerVision(camera=self.camera)
+        self.video_feed = VideoFeed(self.camera, self.computer_vision)
         self.uart_transmitter = None
         # self.uart_transmitter = UARTTransmitter()
         self.micro = Micro()
@@ -44,6 +46,9 @@ class BiraController:
             except Exception as exc:
                 print(f"Unable to preload {label}: {exc}")
 
+        # Started after the models are warmed up so the video doesn't compete with them.
+        self.video_feed.start()
+
     def sleep_mode(self):
         self.micro.wait_for_volume()
     
@@ -54,25 +59,12 @@ class BiraController:
         return transcription
     
     def vision(self):
-        self.camera.open()
-        
-        with self.camera:
-            if self.camera.grab():
-                frame = self.camera.get_frame()
-                if frame is not None:
-                    sl_object, detection_labels = self.computer_vision.detect_objects(frame)
-                else:
-                    print("No frame")
-                    self.camera.close()
-                    return None
-            else:
-                print("No camera")
-                self.camera.close()
-                return None
-        
-        self.camera.close()
-        return sl_object, detection_labels
-    
+        # The video feed owns the camera and keeps it open; ask it for a full detection pass.
+        result = self.video_feed.request_detection()
+        if result is None:
+            print("Vision request failed (no frame or feed not running).")
+        return result
+
     def send_mechanical_command(self, command):
         # EXAMPLE: Simulate an execution process that takes some time and is successful
         sleep(2)
@@ -130,6 +122,7 @@ class BiraController:
     
     def destroy(self):
         components = [
+            self.video_feed,
             self.camera,
             self.computer_vision,
             self.uart_transmitter,

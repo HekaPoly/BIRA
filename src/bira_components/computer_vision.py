@@ -100,7 +100,7 @@ class ComputerVision:
         """
         return self.yolo.names
         
-    def detect_objects(self, frame):
+    def detect_objects(self, frame, refine=True, log=True):
         """
         Detect objects in a frame and return both ZED SDK Objects container and YOLO labels.
         
@@ -126,7 +126,7 @@ class ComputerVision:
             for label in detection_labels:
                 print(f"Detected label ID: {label}")
         """
-        sl_object = self.detect(frame)
+        sl_object = self.detect(frame, refine=refine, log=log)
         detection_labels = [int(obj.label.item() if hasattr(obj.label, "item") else obj.label) for obj in self.__detections]
         return sl_object, detection_labels
 
@@ -232,7 +232,7 @@ class ComputerVision:
         except Exception as exc:
             print(f"SAM refinement failed ({exc}). Keeping ZED positions.")
 
-    def detect(self, frame, iou_thres=0.45):
+    def detect(self, frame, iou_thres=0.45, refine=True, log=True):
         """
         Low-level detection method. Prefer detect_objects() for most use cases.
         
@@ -242,6 +242,8 @@ class ComputerVision:
         Parameters:
             frame (np.array): The image frame in BGRA format
             iou_thres (float): The intersection Over Union (IoU) for NMS. Default 0.45
+            refine (bool): Refine 3D positions with MobileSAM masks. Skipped for the live video feed.
+            log (bool): Write the detections to the history log. Skipped for the live video feed.
             
         Returns:
             sl.Objects: ZED SDK Objects container with:
@@ -261,8 +263,10 @@ class ComputerVision:
         self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
 
         object_list = objects.object_list
-        self.__refine_positions_with_masks(img, detections, object_list)
-        rd.write_history(object_list, computer_vision=self)
+        if refine:
+            self.__refine_positions_with_masks(img, detections, object_list)
+        if log:
+            rd.write_history(object_list, computer_vision=self)
         return objects
         
     
