@@ -28,6 +28,10 @@ class VideoFeed:
     vision pass, request_detection() makes the thread run the full pipeline (with SAM
     refinement and history logging) on its next frame.
 
+    The SAM overlay (toggle with 's') runs in its own worker thread, so the video keeps YOLO
+    speed. Masks are matched to the current YOLO boxes by overlap, so they trail moving objects
+    by the SAM latency (shown on screen as "age").
+
     If no display is available (e.g. SSH without X forwarding), the thread still runs and
     serves vision requests, it just doesn't open a window.
     """
@@ -46,6 +50,13 @@ class VideoFeed:
         self.__last_error = ""
         self.__fps = 0.0
         self.__last_tick = perf_counter()
+        self.__draw_ms = 0.0
+        # Async SAM: the loop submits the latest frame, the worker replaces __sam_result when done.
+        self.__sam_cond = threading.Condition()
+        self.__sam_job = None
+        self.__sam_busy = False
+        self.__sam_thread = None
+        self.__sam_result = ([], [], 0.0, 0.0)  # boxes, masks, finished_at, duration_ms
 
     @staticmethod
     def __display_available():
@@ -66,6 +77,9 @@ class VideoFeed:
         self.__stop.clear()
         self.__thread = threading.Thread(target=self.__run, name="VideoFeed", daemon=True)
         self.__thread.start()
+        if self.__cv.segmenter is not None:
+            self.__sam_thread = threading.Thread(target=self.__sam_worker, name="VideoFeedSAM", daemon=True)
+            self.__sam_thread.start()
         print("[VideoFeed] Live video started. Press 's' in the video window to toggle SAM masks.")
 
     def request_detection(self, timeout=15.0):
@@ -107,7 +121,9 @@ class VideoFeed:
                         request.result = self.__cv.detect_objects(frame)
                         objects = request.result[0]
                     else:
-                        objects = self.__cv.detect(frame, refine=self.__sam_overlay, log=False)
+                        objects = self.__cv.detect(frame, refine=False, log=False)
+                        if self.__sam_overlay:
+                            self.__submit_sam(frame)
                 except Exception as exc:
                     self.__report_error("Detection", exc)
                 finally:
@@ -124,6 +140,35 @@ class VideoFeed:
                     pass
             self.__camera.close()
 
+    def __sam_worker(self):
+        while not self.__stop.is_set():
+            with self.__sam_cond:
+                while self.__sam_job is None and not self.__stop.is_set():
+                    self.__sam_cond.wait(timeout=0.5)
+                job, self.__sam_job = self.__sam_job, None
+                if job is None:
+                    continue
+                self.__sam_busy = True
+            try:
+                image_rgb, boxes = job
+                t = perf_counter()
+                masks = self.__cv.segmenter.segment(image_rgb, boxes)
+                self.__sam_result = (boxes, masks, perf_counter(), (perf_counter() - t) * 1000)
+            except Exception as exc:
+                self.__report_error("SAM", exc)
+            finally:
+                self.__sam_busy = False
+
+    def __submit_sam(self, frame):
+        """Hand the current frame to the SAM worker, unless it is still busy with the previous one."""
+        boxes = [list(b[:4]) for b in self.__cv.last_yolo_boxes]
+        if not boxes or self.__sam_busy or self.__cv.segmenter is None:
+            return
+        with self.__sam_cond:
+            if self.__sam_job is None:
+                self.__sam_job = (cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB), boxes)
+                self.__sam_cond.notify()
+
     def __report_error(self, stage, exc):
         message = f"{stage} failed: {type(exc).__name__}: {exc}"
         if message != self.__last_error:  # print each distinct error once, not every frame
@@ -137,17 +182,18 @@ class VideoFeed:
         self.__fps = 0.9 * self.__fps + 0.1 / max(now - self.__last_tick, 1e-6)
         self.__last_tick = now
 
+        t_draw = perf_counter()
         display = frame.copy()  # the camera buffer is overwritten on the next grab
         n_objects = None
         n_masks = 0
         yolo_boxes = self.__cv.last_yolo_boxes
         if objects is not None:
             n_objects = len(objects.object_list)
-            try:
-                self.__draw_masks(display, objects)
-                n_masks = len(self.__cv.last_masks)
-            except Exception as exc:
-                self.__report_error("Mask drawing", exc)
+            if self.__sam_overlay:
+                try:
+                    n_masks = self.__draw_masks(display, yolo_boxes)
+                except Exception as exc:
+                    self.__report_error("Mask drawing", exc)
             try:
                 render_2D(display, [1.0, 1.0], objects, False, computer_vision=self.__cv)
             except Exception as exc:
@@ -163,6 +209,10 @@ class VideoFeed:
             f"SAM: {'ON' if self.__sam_overlay else 'OFF'} (press s, window must be focused)",
             f"FPS: {self.__fps:.1f}  yolo: {len(yolo_boxes)}  zed objects: {'n/a' if n_objects is None else n_objects}  masks: {n_masks}",
         ]
+        timings = self.__cv.timings
+        _, _, sam_done, sam_ms = self.__sam_result
+        sam_info = f"sam {sam_ms:.0f} (async, age {(perf_counter() - sam_done) * 1000:.0f})" if sam_done else "sam -"
+        lines.append(f"ms: yolo {timings.get('yolo', 0):.0f}  zed {timings.get('zed', 0):.0f}  {sam_info}  draw {self.__draw_ms:.0f}")
         if self.__cv.zed_error:
             lines.append(self.__cv.zed_error[:90])
         if self.__last_error:
@@ -171,6 +221,7 @@ class VideoFeed:
             cv2.putText(display, line, (10, 25 + 25 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0, 255), 3)
             cv2.putText(display, line, (10, 25 + 25 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255, 255), 1)
 
+        self.__draw_ms = (perf_counter() - t_draw) * 1000
         try:
             cv2.imshow(self.WINDOW_NAME, display)
             key = cv2.waitKey(1) & 0xFF
@@ -182,23 +233,49 @@ class VideoFeed:
             self.__sam_overlay = not self.__sam_overlay
             print(f"[VideoFeed] SAM overlay {'ON' if self.__sam_overlay else 'OFF'}")
 
-    def __draw_masks(self, display, objects):
-        masks = self.__cv.last_masks
-        if not masks:
-            return
-        layer = display.copy()
-        for obj in objects.object_list:
-            mask = masks.get(obj.unique_object_id)
-            if mask is None or mask.shape != display.shape[:2]:
+    @staticmethod
+    def __iou(a, b):
+        ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+        iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+        inter = ix * iy
+        union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+        return inter / union if union > 0 else 0.0
+
+    def __draw_masks(self, display, yolo_boxes):
+        """Draw the latest async SAM masks on the current frame; returns how many were drawn.
+
+        Each current YOLO box takes the mask of the most-overlapping box from the SAM frame.
+        Only the box region is blended, not the whole frame.
+        """
+        sam_boxes, masks, _, _ = self.__sam_result
+        height, width = display.shape[:2]
+        drawn = 0
+        for x1, y1, x2, y2, cls_id, _conf in yolo_boxes:
+            best = max(range(len(sam_boxes)), key=lambda i: self.__iou((x1, y1, x2, y2), sam_boxes[i]), default=None)
+            if best is None or self.__iou((x1, y1, x2, y2), sam_boxes[best]) < 0.5:
                 continue
-            color = generate_color_id_u(obj.id)
-            layer[mask] = color
-            contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(display, contours, -1, color, 2)
-        cv2.addWeighted(layer, 0.5, display, 0.5, 0.0, display)
+            mask = masks[best]
+            if mask.shape != (height, width):
+                continue
+            # Region of the SAM frame's box, padded a little
+            bx1, by1, bx2, by2 = sam_boxes[best]
+            rx1, ry1 = max(int(bx1) - 5, 0), max(int(by1) - 5, 0)
+            rx2, ry2 = min(int(bx2) + 5, width), min(int(by2) + 5, height)
+            roi, roi_mask = display[ry1:ry2, rx1:rx2], mask[ry1:ry2, rx1:rx2]
+            color = generate_color_id_u(cls_id)
+            roi[roi_mask] = (roi[roi_mask] * 0.5 + np.array(color) * 0.5).astype(np.uint8)
+            contours, _ = cv2.findContours(roi_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(roi, contours, -1, color, 2)
+            drawn += 1
+        return drawn
 
     def destroy(self):
         self.__stop.set()
+        with self.__sam_cond:
+            self.__sam_cond.notify_all()
+        if self.__sam_thread is not None:
+            self.__sam_thread.join(timeout=5)
+            self.__sam_thread = None
         if self.__thread is not None:
             self.__thread.join(timeout=5)
             self.__thread = None

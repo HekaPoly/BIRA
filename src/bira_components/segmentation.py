@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 
 import cv2
@@ -27,6 +28,9 @@ class Segmenter:
     def __init__(self, weights=None, device="cuda"):
         self.__weights = weights or self._default_weights()
         self.__device = device
+        # The Ultralytics predictor is not thread-safe, and the live video worker and an on-demand
+        # vision request can both call segment().
+        self.__lock = threading.Lock()
         print("Initializing Network(MobileSAM)...")
         self.sam = SAM(self.__weights)
         print("MobileSAM initialized")
@@ -51,13 +55,14 @@ class Segmenter:
         if len(boxes_xyxy) == 0:
             return []
 
-        results = self.sam.predict(
-            image_rgb,
-            bboxes=[list(map(float, box)) for box in boxes_xyxy],
-            device=self.__device,
-            save=False,
-            verbose=False,
-        )
+        with self.__lock:
+            results = self.sam.predict(
+                image_rgb,
+                bboxes=[list(map(float, box)) for box in boxes_xyxy],
+                device=self.__device,
+                save=False,
+                verbose=False,
+            )
         masks = results[0].masks
         if masks is None:
             return [np.zeros(image_rgb.shape[:2], dtype=bool) for _ in boxes_xyxy]

@@ -6,6 +6,7 @@ import pyzed.sl as sl
 from ultralytics import YOLO
 import cv2
 import argparse
+from time import perf_counter
 
 from bira_components.camera import Camera
 from bira_components.segmentation import Segmenter
@@ -50,6 +51,7 @@ class ComputerVision:
         self.__last_masks = {}
         self.__last_yolo = []
         self.__zed_error = ""
+        self.__timings = {}
 
         print("Intializing Network(YOLO)...")
         self.yolo = YOLO(self.__opt.weights)
@@ -219,6 +221,12 @@ class ComputerVision:
         return self.__last_yolo
 
     @property
+    def timings(self):
+        """dict[str, float]: duration in ms of each stage of the last detect() call
+        (prep, yolo, zed and, when refined, xyz, sam, depth, history)."""
+        return self.__timings
+
+    @property
     def zed_error(self):
         """str: last ZED ingest/retrieve error, empty if the last call succeeded."""
         return self.__zed_error
@@ -236,10 +244,15 @@ class ComputerVision:
         if self.segmenter is None or len(object_list) == 0:
             return
         try:
+            t = perf_counter()
             xyz_map = self.__camera.get_xyz_map()
+            self.__timings["xyz"] = (perf_counter() - t) * 1000
             if xyz_map is None:
                 return
+            t = perf_counter()
             masks = self.segmenter.segment(img_rgb, detections.xyxy.tolist())
+            self.__timings["sam"] = (perf_counter() - t) * 1000
+            t = perf_counter()
             mask_by_id = {box.unique_object_id: mask for box, mask in zip(self.__detections, masks)}
             self.__last_masks = mask_by_id
             for obj in object_list:
@@ -249,6 +262,7 @@ class ComputerVision:
                 position = Segmenter.mask_position(mask, xyz_map)
                 if position is not None:
                     obj.position = position
+            self.__timings["depth"] = (perf_counter() - t) * 1000
         except Exception as exc:
             print(f"SAM refinement failed ({exc}). Keeping ZED positions.")
 
@@ -271,28 +285,39 @@ class ComputerVision:
                 - is_new(): whether this is fresh data
                 - is_tracked(): whether tracking is active
         """
+        self.__timings = timings = {}
+        t = perf_counter()
         objects = sl.Objects()
         obj_runtime_param = sl.ObjectDetectionRuntimeParameters()
         img = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
+        timings["prep"] = (perf_counter() - t) * 1000
+        t = perf_counter()
         detections = self.yolo.predict(img, save=False, imgsz=self.__opt.img_size, conf=self.__opt.conf_thres,
                         iou=iou_thres)[0].cpu().numpy().boxes
+        timings["yolo"] = (perf_counter() - t) * 1000
         self.__detections = self.__detections_to_custom_box(detections)
         self.__last_yolo = [(*xyxy, int(c), float(p)) for xyxy, c, p in
                             zip(detections.xyxy.tolist(), detections.cls.tolist(), detections.conf.tolist())]
         
         # -- Ingest detections
+        t = perf_counter()
         ingest_status = self.__camera.get_camera().ingest_custom_box_objects(self.__detections)
         retrieve_status = self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
         errors = [f"{name}: {repr(st)}" for name, st in (("ingest", ingest_status), ("retrieve", retrieve_status))
                   if st != sl.ERROR_CODE.SUCCESS]
         self.__zed_error = "ZED " + ", ".join(errors) if errors else ""
+        timings["zed"] = (perf_counter() - t) * 1000
 
         object_list = objects.object_list
         self.__last_masks = {}
         if refine:
             self.__refine_positions_with_masks(img, detections, object_list)
         if log:
+            t = perf_counter()
             rd.write_history(object_list, computer_vision=self)
+            timings["history"] = (perf_counter() - t) * 1000
+        if refine:
+            print("[Vision] timings (ms): " + ", ".join(f"{k} {v:.0f}" for k, v in timings.items()))
         return objects
         
     
