@@ -23,6 +23,7 @@ class Camera:
                     self.__zed = sl.Camera()
                     self.__camera_pose = sl.Pose()
                     self.__image = sl.Mat()
+                    self.__xyz = sl.Mat()
                     self.isInitialised = True
 
     def get_camera(self):
@@ -77,6 +78,17 @@ class Camera:
             else:
                 return None
     
+    def get_xyz_map(self, memory = sl.MEM.CPU):
+        """Retrieves the point cloud (XYZ per pixel) aligned with the left image.
+        Coordinates and units follow the sl.InitParameters used to open the camera.
+        Returns:
+            np.array or None: HxWx4 float32 array (X, Y, Z, color), or None if the retrieve failed
+        """
+        with Camera.__lock:
+            if self.__zed.retrieve_measure(self.__xyz, sl.MEASURE.XYZ, memory) == sl.ERROR_CODE.SUCCESS:
+                return self.__xyz.get_data().copy()
+            return None
+
     def get_position(self):
         """Retrieves the estimated position and orientation of the camera with reference to the world frame.
         Parameters:
@@ -95,7 +107,8 @@ class Camera:
         None
         """
         self.__image.free()
-    
+        self.__xyz.free()
+
     def close(self):
         self.__zed.close()
 

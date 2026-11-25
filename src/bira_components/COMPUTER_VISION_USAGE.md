@@ -278,3 +278,14 @@ if sl_objects.object_list:
 ## Deprecation Note
 
 The file `src/cv_viewer/labels.py` is **no longer needed**. All label resolution now goes through the `ComputerVision` instance using `get_label_name()` or the `label_dict` property. This ensures labels always match the loaded YOLO model, regardless of which model you use or if you train a custom one.
+
+## MobileSAM position refinement
+
+When `use_sam` is enabled (default), `ComputerVision.detect()` prompts MobileSAM (`bira_components/segmentation.py`)
+with the YOLO boxes. For each object, `obj.position` is replaced by the median 3D point of the ZED point cloud
+(`Camera.get_xyz_map()`) under the eroded mask, which ignores background depth inside the box.
+
+- Weights: `models/mobile_sam.pt` (download from the Ultralytics assets release and place it there).
+- If the weights are missing, or a mask has fewer than 50 valid depth pixels, the ZED box-based position is kept.
+- Disable with `ComputerVision(opt=SimpleNamespace(use_sam=False))` or `--no_sam` on the CLI.
+- Positions are in the camera frame, like the ZED object positions they replace.

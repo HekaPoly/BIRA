@@ -8,6 +8,7 @@ import cv2
 import argparse
 
 from bira_components.camera import Camera
+from bira_components.segmentation import Segmenter
 from bira_components import history as rd
 
 
@@ -30,6 +31,7 @@ class ComputerVision:
             weights=str(models_dir / "yolov8n.pt"),
             img_size=416,
             conf_thres=0.4,
+            use_sam=True,
         )
 
     def __init__(self, opt = None, camera=None):
@@ -42,6 +44,7 @@ class ComputerVision:
                 weights=getattr(opt, "weights", default_opt.weights),
                 img_size=getattr(opt, "img_size", default_opt.img_size),
                 conf_thres=getattr(opt, "conf_thres", default_opt.conf_thres),
+                use_sam=getattr(opt, "use_sam", default_opt.use_sam),
             )
         self.__camera = camera
 
@@ -51,6 +54,15 @@ class ComputerVision:
         self.yolo.model.eval()
         self._lock = asyncio.Lock()
         print("Network initialized")
+
+        # MobileSAM refines the 3D position using the object's mask. If it can't be
+        # loaded, detection keeps working with the ZED box-based position.
+        self.segmenter = None
+        if self.__opt.use_sam:
+            try:
+                self.segmenter = Segmenter()
+            except Exception as exc:
+                print(f"MobileSAM unavailable ({exc}). Using box-based positions.")
 
     def warmup(self):
         print("Warming up YOLO inference...")
@@ -63,6 +75,8 @@ class ComputerVision:
             conf=self.__opt.conf_thres,
         )[0]
         print("YOLO inference ready.")
+        if self.segmenter is not None:
+            self.segmenter.warmup()
         
     def get_label_name(self, label_id):
         """
@@ -195,6 +209,29 @@ class ComputerVision:
         hsv_filtered = cv2.merge([h, s, v])
         return cv2.cvtColor(hsv_filtered, cv2.COLOR_HSV2BGR)
     
+    def __refine_positions_with_masks(self, img_rgb, detections, object_list):
+        """Replace each ZED object's position with the median 3D point under its SAM mask.
+
+        Objects whose mask has too few valid depth pixels keep the ZED position.
+        """
+        if self.segmenter is None or len(object_list) == 0:
+            return
+        try:
+            xyz_map = self.__camera.get_xyz_map()
+            if xyz_map is None:
+                return
+            masks = self.segmenter.segment(img_rgb, detections.xyxy.tolist())
+            mask_by_id = {box.unique_object_id: mask for box, mask in zip(self.__detections, masks)}
+            for obj in object_list:
+                mask = mask_by_id.get(obj.unique_object_id)
+                if mask is None:
+                    continue
+                position = Segmenter.mask_position(mask, xyz_map)
+                if position is not None:
+                    obj.position = position
+        except Exception as exc:
+            print(f"SAM refinement failed ({exc}). Keeping ZED positions.")
+
     def detect(self, frame, iou_thres=0.45):
         """
         Low-level detection method. Prefer detect_objects() for most use cases.
@@ -222,8 +259,9 @@ class ComputerVision:
         # -- Ingest detections
         self.__camera.get_camera().ingest_custom_box_objects(self.__detections)
         self.__camera.get_camera().retrieve_objects(objects, obj_runtime_param)
-        
+
         object_list = objects.object_list
+        self.__refine_positions_with_masks(img, detections, object_list)
         rd.write_history(object_list, computer_vision=self)
         return objects
         
@@ -235,6 +273,7 @@ if __name__ == "__main__":
     parser.add_argument('--weights', type=str, default=str(models_dir / 'yolov8n.pt'), help='model.pt path(s)')
     parser.add_argument('--svo', type=str, default=None, help='optional svo file')
     parser.add_argument('--img_size', type=int, default=416, help='inference size (pixels)')
+    parser.add_argument('--no_sam', dest='use_sam', action='store_false', help='disable MobileSAM position refinement')
     parser.add_argument('--conf_thres', type=float, default=0.4, help='object confidence threshold')
 
     opt = parser.parse_args()
