@@ -1,3 +1,5 @@
+import numpy as np
+
 from bira_orchestration.states.base_state import State
 from bira_orchestration.enums import VisionCode, StateCode
 
@@ -20,9 +22,10 @@ class VisionState(State):
         for obj in context.objects_detected:
             obj_id = obj.id
             confidence = obj.confidence
-            position_3d = obj.position  # [x, y, z]
+            position_3d = obj.position  # [x, y, z] in meters, camera frame
+            distance = float(np.linalg.norm(position_3d))
             bbox_2d = obj.bounding_box_2d
-            self.log_state(f"Object ID: {obj_id}, Confidence: {confidence}, Position: {position_3d}, BBox: {bbox_2d}")
+            self.log_state(f"Object ID: {obj_id}, Confidence: {confidence}, Distance: {distance:.2f} m, Position: {position_3d}, BBox: {bbox_2d}")
 
         if not context.objects_detected:
             self.log_state("No objects returned by vision.")

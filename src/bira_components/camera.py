@@ -20,6 +20,8 @@ class Camera:
             with Camera.__lock:
                 if not self.isInitialised:
                     self.__init_params = sl.InitParameters()
+                    # Positions, distances and the point cloud are all in meters (ZED default is millimeters).
+                    self.__init_params.coordinate_units = sl.UNIT.METER
                     self.__zed = sl.Camera()
                     self.__camera_pose = sl.Pose()
                     self.__image = sl.Mat()
